@@ -1,4 +1,4 @@
-# 📚 Complete README.md for Your Authentication System
+# 📚 Complete README.md for Authentication System
 
 ```markdown
 # 🔐 Django JWT Authentication System - Pure PyJWT Implementation
