@@ -1,0 +1,56 @@
+# --- Frontend (Node/React/Next) ---
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+coverage/
+build/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Backend (Python/Django) ---
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static/
+
+# --- Environments & Virtual Envs (CRITICAL) ---
+myenv/
+env/
+venv/
+.env
+.venv
+**/.env
+**/.venv
+**/myenv/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Celery & Logs ---
+celerybeat-schedule
+celerybeat.pid
+*.log
+logs/
+
+# --- OS & IDE Specific ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Misc ---
+pip-log.txt
+pip-delete-this-directory.txt
