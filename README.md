@@ -1,6 +1,3 @@
-# 📚 Complete README.md for Authentication System
-
-```markdown
 # 🔐 Django JWT Authentication System - Pure PyJWT Implementation
 
 A **production-ready**, **enterprise-grade** authentication system built with Django, PyJWT, and WebSockets. Features manual token blacklisting, device management, session limiting, and real-time logout notifications.
@@ -9,7 +6,7 @@ A **production-ready**, **enterprise-grade** authentication system built with Dj
 
 ## ✨ Features
 
-### 🔑 **Authentication**
+### 🔑 Authentication
 - ✅ User registration with email verification
 - ✅ Login with JWT token generation (Pure PyJWT - No SimpleJWT)
 - ✅ Access token (15 min) & Refresh token (7 days)
@@ -18,7 +15,7 @@ A **production-ready**, **enterprise-grade** authentication system built with Dj
 - ✅ Password reset with email links
 - ✅ Change password functionality
 
-### 🛡️ **Security**
+### 🛡️ Security
 - ✅ Token blacklisting (manual control)
 - ✅ Outstanding token tracking
 - ✅ Session limiting (max 5 concurrent sessions)
@@ -28,32 +25,32 @@ A **production-ready**, **enterprise-grade** authentication system built with Dj
 - ✅ Audience & Issuer validation
 - ✅ Strong secret key requirement
 
-### 📱 **Device Management**
+### 📱 Device Management
 - ✅ Track user devices (User-Agent, IP address)
 - ✅ Unique device ID per login
 - ✅ View all logged-in devices
 - ✅ Remove specific device (force logout)
 - ✅ Remove all other devices
 
-### 📊 **Session Management**
+### 📊 Session Management
 - ✅ View all active sessions
 - ✅ Session expiration tracking
 - ✅ Last accessed timestamp
 - ✅ Automatic cleanup of expired tokens (Celery beat)
 
-### 🔌 **WebSocket Support**
+### 🔌 WebSocket Support
 - ✅ Real-time session kill notifications
 - ✅ Device-specific WebSocket groups
 - ✅ Automatic disconnect on token expiration
 
-### 📧 **Email Integration**
+### 📧 Email Integration
 - ✅ Email verification on registration
 - ✅ Password reset emails
 - ✅ Session killed notifications (optional)
 
 ---
 
-## 🏗️ **Architecture**
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -90,7 +87,7 @@ A **production-ready**, **enterprise-grade** authentication system built with Dj
 
 ---
 
-## 📁 **Project Structure**
+## 📁 Project Structure
 
 ```
 auth_project/
@@ -125,14 +122,14 @@ auth_project/
 
 ---
 
-## 🚀 **Quick Start**
+## 🚀 Quick Start
 
-### **Prerequisites**
+### Prerequisites
 - Python 3.10+
 - Redis (for Celery & WebSockets)
 - PostgreSQL/MySQL/SQLite (any database)
 
-### **Installation**
+### Installation
 
 ```bash
 # 1. Clone repository
@@ -181,9 +178,9 @@ daphne -b 0.0.0.0 -p 8000 auth_project.asgi:application
 
 ---
 
-## 📡 **API Endpoints**
+## 📡 API Endpoints
 
-### **Authentication**
+### Authentication
 
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|---------------|
@@ -196,7 +193,7 @@ daphne -b 0.0.0.0 -p 8000 auth_project.asgi:application
 | POST | `/api/users/reset-password/` | Reset password | ❌ No |
 | POST | `/api/users/change-password/` | Change password | ✅ Yes |
 
-### **User Management**
+### User Management
 
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|---------------|
@@ -206,7 +203,7 @@ daphne -b 0.0.0.0 -p 8000 auth_project.asgi:application
 | DELETE | `/api/users/devices/<id>/` | Remove specific device | ✅ Yes |
 | GET | `/api/users/sessions/` | List active sessions | ✅ Yes |
 
-### **Testing**
+### Testing
 
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|---------------|
@@ -214,9 +211,9 @@ daphne -b 0.0.0.0 -p 8000 auth_project.asgi:application
 
 ---
 
-## 🔌 **API Examples**
+## 🔌 API Examples
 
-### **1. Register User**
+### 1. Register User
 
 ```bash
 curl -X POST http://localhost:8000/api/users/register/ \
@@ -235,7 +232,7 @@ curl -X POST http://localhost:8000/api/users/register/ \
 }
 ```
 
-### **2. Login (Mobile/Native)**
+### 2. Login (Mobile/Native)
 
 ```bash
 curl -X POST http://localhost:8000/api/users/login/ \
@@ -260,7 +257,7 @@ curl -X POST http://localhost:8000/api/users/login/ \
 }
 ```
 
-### **3. Login (Web - with HttpOnly cookie)**
+### 3. Login (Web - with HttpOnly cookie)
 
 ```bash
 curl -X POST http://localhost:8000/api/users/login/ \
@@ -275,14 +272,14 @@ curl -X POST http://localhost:8000/api/users/login/ \
 
 **Response:** Cookie automatically set
 
-### **4. Access Protected Resource**
+### 4. Access Protected Resource
 
 ```bash
 curl -X GET http://localhost:8000/api/users/profile/ \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-### **5. Refresh Token (Mobile)**
+### 5. Refresh Token (Mobile)
 
 ```bash
 curl -X POST http://localhost:8000/api/users/token/refresh/ \
@@ -293,7 +290,7 @@ curl -X POST http://localhost:8000/api/users/token/refresh/ \
   }'
 ```
 
-### **6. Refresh Token (Web - uses cookie)**
+### 6. Refresh Token (Web - uses cookie)
 
 ```bash
 curl -X POST http://localhost:8000/api/users/token/refresh/ \
@@ -302,7 +299,7 @@ curl -X POST http://localhost:8000/api/users/token/refresh/ \
   -b cookies.txt
 ```
 
-### **7. Logout (Current device)**
+### 7. Logout (Current device)
 
 ```bash
 curl -X POST http://localhost:8000/api/users/logout/ \
@@ -314,7 +311,7 @@ curl -X POST http://localhost:8000/api/users/logout/ \
   }'
 ```
 
-### **8. Logout (All devices)**
+### 8. Logout (All devices)
 
 ```bash
 curl -X POST http://localhost:8000/api/users/logout/ \
@@ -326,21 +323,21 @@ curl -X POST http://localhost:8000/api/users/logout/ \
   }'
 ```
 
-### **9. List All Devices**
+### 9. List All Devices
 
 ```bash
 curl -X GET http://localhost:8000/api/users/devices/ \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-### **10. Remove Other Devices**
+### 10. Remove Other Devices
 
 ```bash
 curl -X DELETE http://localhost:8000/api/users/devices/ \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-### **11. List Active Sessions**
+### 11. List Active Sessions
 
 ```bash
 curl -X GET http://localhost:8000/api/users/sessions/ \
@@ -349,9 +346,9 @@ curl -X GET http://localhost:8000/api/users/sessions/ \
 
 ---
 
-## 🔌 **WebSocket Integration**
+## 🔌 WebSocket Integration
 
-### **Connect to WebSocket**
+### Connect to WebSocket
 
 ```javascript
 // Frontend JavaScript
@@ -377,7 +374,7 @@ ws.onclose = () => {
 };
 ```
 
-### **React Hook Example**
+### React Hook Example
 
 ```jsx
 import { useEffect, useState } from 'react';
@@ -417,7 +414,7 @@ function useWebSocket(token) {
 
 ---
 
-## 🐍 **Python Client Example**
+## 🐍 Python Client Example
 
 ```python
 import requests
@@ -488,7 +485,7 @@ print(profile)
 
 ---
 
-## 🔧 **Environment Variables**
+## 🔧 Environment Variables
 
 Create a `.env` file in the project root:
 
@@ -513,9 +510,9 @@ REDIS_URL=redis://localhost:6379/0
 
 ---
 
-## 🗄️ **Database Schema**
+## 🗄️ Database Schema
 
-### **Users Table**
+### Users Table
 | Column | Type | Description |
 |--------|------|-------------|
 | id | Integer | Primary key |
@@ -526,7 +523,7 @@ REDIS_URL=redis://localhost:6379/0
 | is_active | Boolean | Account active status |
 | date_joined | DateTime | Registration date |
 
-### **Device Table**
+### Device Table
 | Column | Type | Description |
 |--------|------|-------------|
 | id | Integer | Primary key |
@@ -536,7 +533,7 @@ REDIS_URL=redis://localhost:6379/0
 | last_login | DateTime | Last login timestamp |
 | ip_address | IPAddress | Last known IP |
 
-### **OutstandingToken Table**
+### OutstandingToken Table
 | Column | Type | Description |
 |--------|------|-------------|
 | id | Integer | Primary key |
@@ -548,7 +545,7 @@ REDIS_URL=redis://localhost:6379/0
 | expires_at | DateTime | Token expiration time |
 | is_active | Boolean | Token active status |
 
-### **BlacklistedToken Table**
+### BlacklistedToken Table
 | Column | Type | Description |
 |--------|------|-------------|
 | id | Integer | Primary key |
@@ -558,14 +555,14 @@ REDIS_URL=redis://localhost:6379/0
 
 ---
 
-## 🧪 **Testing**
+## 🧪 Testing
 
-### **Run Tests**
+### Run Tests
 ```bash
 python manage.py test users
 ```
 
-### **Test Coverage**
+### Test Coverage
 ```bash
 pip install coverage
 coverage run manage.py test users
@@ -573,7 +570,7 @@ coverage report
 coverage html  # Open htmlcov/index.html
 ```
 
-### **Manual Testing with cURL**
+### Manual Testing with cURL
 
 ```bash
 # Complete auth flow
@@ -608,7 +605,7 @@ curl -X POST http://localhost:8000/api/users/logout/ \
 
 ---
 
-## 📊 **Performance**
+## 📊 Performance
 
 | Operation | Average Time |
 |-----------|--------------|
@@ -620,7 +617,7 @@ curl -X POST http://localhost:8000/api/users/logout/ \
 
 ---
 
-## 🔒 **Security Features Implemented**
+## 🔒 Security Features Implemented
 
 - ✅ **Algorithm whitelisting** - Only HS256 allowed
 - ✅ **Audience validation** - Prevents token misuse
@@ -635,27 +632,27 @@ curl -X POST http://localhost:8000/api/users/logout/ \
 
 ---
 
-## 🚨 **Common Issues & Solutions**
+## 🚨 Common Issues & Solutions
 
-### **Issue 1: Token Expired**
+### Issue 1: Token Expired
 ```
 Error: "Token has expired"
 Solution: Use refresh token endpoint to get new access token
 ```
 
-### **Issue 2: Token Blacklisted**
+### Issue 2: Token Blacklisted
 ```
 Error: "Token is blacklisted"
 Solution: Login again to get new tokens
 ```
 
-### **Issue 3: WebSocket Connection Failed**
+### Issue 3: WebSocket Connection Failed
 ```
 Error: "WebSocket connection failed"
 Solution: Ensure Redis is running and CHANNEL_LAYERS configured correctly
 ```
 
-### **Issue 4: Rate Limited**
+### Issue 4: Rate Limited
 ```
 Error: "Rate limit exceeded"
 Solution: Wait 1 minute before trying again
@@ -663,9 +660,9 @@ Solution: Wait 1 minute before trying again
 
 ---
 
-## 📈 **Scaling Considerations**
+## 📈 Scaling Considerations
 
-### **For Production Deployment**
+### For Production Deployment
 
 1. **Use PostgreSQL instead of SQLite**
 ```python
@@ -706,13 +703,13 @@ sentry_sdk.init(dsn="your-sentry-dsn")
 
 ---
 
-## 📝 **License**
+## 📝 License
 
 MIT License - Free for commercial and personal use
 
 ---
 
-## 🤝 **Contributing**
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create feature branch (`git checkout -b feature/amazing`)
@@ -722,7 +719,7 @@ MIT License - Free for commercial and personal use
 
 ---
 
-## 📧 **Contact**
+## 📧 Contact
 
 - **Author**: Your Name
 - **Email**: your.email@example.com
@@ -730,7 +727,7 @@ MIT License - Free for commercial and personal use
 
 ---
 
-## 🙏 **Acknowledgments**
+## 🙏 Acknowledgments
 
 - Django Framework
 - PyJWT library
@@ -740,13 +737,13 @@ MIT License - Free for commercial and personal use
 
 ---
 
-## ⭐ **Show Your Support**
+## ⭐ Show Your Support
 
 If this project helped you, please give it a ⭐ on GitHub!
 
 ---
 
-## 🎯 **Roadmap**
+## 🎯 Roadmap
 
 - [ ] Add 2FA support
 - [ ] OAuth2 integration (Google, GitHub)
