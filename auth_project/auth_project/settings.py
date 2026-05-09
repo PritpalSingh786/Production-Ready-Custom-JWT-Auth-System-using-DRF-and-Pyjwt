@@ -12,6 +12,8 @@ DEBUG = os.getenv("DEBUG", "True") == "True"
 ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS = [
+    "daphne",
+    "channels",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -21,7 +23,6 @@ INSTALLED_APPS = [
     "rest_framework",
     "django_celery_beat",
     "corsheaders",
-    "channels",
     "users",
 ]
 

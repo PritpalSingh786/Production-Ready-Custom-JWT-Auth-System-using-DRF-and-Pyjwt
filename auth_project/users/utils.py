@@ -5,9 +5,44 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from .models import OutstandingToken, BlacklistedToken
 from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 
 User = get_user_model()
+
+
+async def averify_token(token, token_type='access'):
+    """Verify and decode JWT token - Async version (for WebSocket)"""
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            audience=settings.JWT_AUDIENCE,
+            issuer=settings.JWT_ISSUER,
+            options={'require': ['exp', 'iat', 'jti', 'type']}
+        )
+        
+        if payload.get('type') != token_type:
+            return None
+        
+        # Async database call
+        exists = await sync_to_async(BlacklistedToken.objects.filter(jti=payload.get('jti')).exists)()
+        if exists:
+            return None
+        
+        if payload['exp'] < datetime.utcnow().timestamp():
+            return None
+        
+        user_exists = await sync_to_async(User.objects.filter(id=payload['user_id'], is_active=True).exists)()
+        if not user_exists:
+            return None
+        
+        return payload
+        
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
 
 
 def create_access_token(user, device_id=None, platform="web"):
