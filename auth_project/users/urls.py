@@ -1,17 +1,17 @@
 from django.urls import path
 from .views import (
-    RegisterView, 
-    VerifyEmailView, 
-    LoginView, 
-    RefreshTokenView, 
-    LogoutView, 
-    PasswordResetRequestView, 
+    RegisterView,
+    VerifyEmailView,
+    LoginView,
+    RefreshTokenView,
+    LogoutView,
+    PasswordResetRequestView,
     SetNewPasswordView,
     ChangePasswordView,
     ProfileView,
     DevicesView,
     SessionsView,
-    AuthenticatedView
+    AuthenticatedView,
 )
 
 urlpatterns = [
@@ -30,10 +30,9 @@ urlpatterns = [
     path("authenticated/", AuthenticatedView.as_view()),
 ]
 
-'''
+"""
 
 web: gunicorn rentNotify.wsgi
 worker: celery -A auth_project worker --loglevel=info
-beat:  celery -A auth_project beat -l info
 
-'''
+"""

@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from celery.schedules import crontab
 
 load_dotenv()
 
@@ -21,7 +20,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
-    "django_celery_beat",
     "corsheaders",
     "users",
 ]
@@ -44,21 +42,16 @@ CORS_ALLOW_CREDENTIALS = True
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 AUTH_USER_MODEL = "users.User"
 
-# JWT Settings
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ISSUER = os.getenv("JWT_ISSUER", "my-app")
 JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "my-users")
-ACCESS_TOKEN_LIFETIME = 15  # minutes
-REFRESH_TOKEN_LIFETIME = 7  # days
+ACCESS_TOKEN_LIFETIME = 15
+REFRESH_TOKEN_LIFETIME = 7
 
-# REST Framework settings
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "users.pyjwtauthentication.PyJWTAuthentication",
-    )
+    "DEFAULT_AUTHENTICATION_CLASSES": ("users.pyjwtauthentication.PyJWTAuthentication",)
 }
 
-# Email settings
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
@@ -67,73 +60,65 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
-# Celery settings
-CELERY_BROKER_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_TASK_TIME_LIMIT = 30
 CELERY_TASK_SOFT_TIME_LIMIT = 25
-
-CELERY_BEAT_SCHEDULE = {
-    "clean-expired-tokens-every-hour": {
-        "task": "users.tasks.clean_expired_tokens",
-        "schedule": crontab(minute=0, hour="*/1"),
-    },
-}
-
 CELERY_TIMEZONE = "Asia/Kolkata"
-CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
-# Database
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
 }
 
 AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Kolkata'
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "Asia/Kolkata"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+STATIC_URL = "static/"
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# WebSocket Channels
 ASGI_APPLICATION = "auth_project.asgi.application"
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")],
+            "hosts": [REDIS_URL],
         },
     },
 }
 
-ROOT_URLCONF = 'auth_project.urls'
+ROOT_URLCONF = "auth_project.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'auth_project.wsgi.application'
+WSGI_APPLICATION = "auth_project.wsgi.application"
