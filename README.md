@@ -1,4 +1,4 @@
-# 🚀 Production Ready JWT Auth System
+# 🚀 Production-Ready-Custom-JWT-Auth-System-using-DRF-and-Pyjwt
 
 A **production-ready full-stack authentication system** built using **React and Django REST Framework**, implementing **secure JWT authentication with Redis-based token management, real-time session handling, refresh token rotation, and automatic token expiry — no Celery Beat required!**
 
