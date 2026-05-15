@@ -163,18 +163,21 @@ Frontend Handles Auto Logout
 
 ---
 
-# 🔐 Token Workflow
+# 🔐 JWT Security Implementation
 
 ## Access Token
 
-* Short-lived token for API authentication
+* Short-lived access token for API authentication
+* Used for protected API routes
 * Stored on frontend state
+
+---
 
 ## Refresh Token
 
 * Used to generate new access tokens
-* Stored in HttpOnly cookie (web)
-* Stored in Redis with automatic expiry
+* Stored securely using HttpOnly cookies for web clients
+* Managed through Redis-backed session workflows
 
 ---
 
@@ -184,8 +187,10 @@ Each refresh request:
 
 1. Generates a new access token
 2. Issues a new refresh token
-3. Blacklists previous refresh token
+3. Invalidates previous refresh token
 4. Updates Redis token references
+
+This helps reduce token replay risks and improves session security.
 
 ---
 
@@ -194,6 +199,111 @@ Each refresh request:
 * Tokens are blacklisted on logout
 * Blacklisted token references are stored in Redis
 * Redis TTL automatically removes expired entries
+
+When using refresh token rotation and token blacklisting, JWT authentication becomes a hybrid approach combining stateless access tokens with stateful refresh token/session management.
+
+---
+
+# 🔐 Advanced JWT Security Practices
+
+## 🚫 Minimal Token Claims
+
+Tokens avoid storing sensitive user information such as:
+
+* Email
+* Username
+* Personal details
+
+Only minimal claims are included:
+
+* `user_id`
+* `device_id`
+* `jti`
+
+---
+
+## 🧾 Issuer (`iss`) Validation
+
+Each token includes an issuer claim to validate token origin.
+
+Example:
+
+```json
+{
+  "iss": "my-app"
+}
+```
+
+---
+
+## 🎯 Audience (`aud`) Validation
+
+Each token includes an audience claim to validate intended token usage.
+
+Example:
+
+```json
+{
+  "aud": "my-app-users"
+}
+```
+
+---
+
+## 🔐 Secure Algorithm Enforcement
+
+* Explicit JWT algorithm validation using `HS256`
+* Prevents insecure algorithm usage
+
+---
+
+## 🍪 Secure Cookie Storage
+
+Refresh tokens can be stored using secure cookie settings:
+
+```python
+httponly=True
+secure=True
+samesite="Strict"
+```
+
+This helps improve protection against XSS and CSRF-related risks.
+
+---
+
+## 🔄 Token Replay Protection
+
+* Refresh tokens rotate on every refresh request
+* Previous refresh tokens are invalidated automatically
+* Redis helps manage token/session references
+
+---
+
+## 📱 Device-Based Token Binding
+
+Each token is associated with a `device_id`.
+
+This enables:
+
+* Device tracking
+* Device-level logout
+* Multi-device session management
+
+---
+
+## ⚡ Real-Time Session Invalidation
+
+* WebSocket-based logout notifications
+* Session invalidation events across connected devices
+* Real-time session handling workflows
+
+---
+
+## 🧠 Secure Token Lifecycle
+
+* Short-lived access tokens
+* Rotating refresh tokens
+* Redis TTL-based expiry handling
 
 ---
 
