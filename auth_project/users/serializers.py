@@ -576,4 +576,3 @@ class SessionSerializer(
                 "ip_address"
             )
         }
-
