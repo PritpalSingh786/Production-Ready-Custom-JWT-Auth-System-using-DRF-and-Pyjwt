@@ -18,7 +18,7 @@ def create_access_token(
     platform="web"
 ):
     payload = {
-        "user_id": user.id,
+        "user_id": str(user.id),
         "device_id": (
             str(device_id)
             if device_id else None
@@ -50,7 +50,7 @@ def create_refresh_token(
     platform="web"
 ):
     payload = {
-        "user_id": user.id,
+        "user_id": str(user.id),
         "device_id": (
             str(device_id)
             if device_id else None

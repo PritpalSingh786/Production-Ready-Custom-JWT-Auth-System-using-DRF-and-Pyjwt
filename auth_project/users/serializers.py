@@ -46,25 +46,25 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["username", "email", "password"]
+        fields = ["user_id", "email", "password"]
 
-    def validate_username(self, value):
+    def validate_user_id(self, value):
 
         if len(value) < 4:
             raise serializers.ValidationError(
-                "Username must be at least 4 characters long"
+                "userId must be at least 4 characters long"
             )
 
         if not re.match(r"^[a-zA-Z0-9_]+$", value):
             raise serializers.ValidationError(
-                "Username can contain only letters, numbers and underscore"
+                "userId can contain only letters, numbers and underscore"
             )
 
         if User.objects.filter(
-            username__iexact=value
+             user_id__iexact=value
         ).exists():
             raise serializers.ValidationError(
-                "Username already exists"
+                "userId already exists"
             )
 
         return value
@@ -93,7 +93,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def save(self, **kwargs):
 
         user = User.objects.create_user(
-            username=self.validated_data["username"],
+            user_id=self.validated_data["user_id"],
             email=self.validated_data["email"],
             password=self.validated_data["password"]
         )
@@ -129,7 +129,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class LoginSerializer(serializers.Serializer):
 
-    username = serializers.CharField()
+    userId = serializers.CharField()
 
     password = serializers.CharField(
         write_only=True
@@ -138,23 +138,25 @@ class LoginSerializer(serializers.Serializer):
     platform = serializers.CharField()
 
     def validate(self, attrs):
+        print(attrs, "attrrrrr")
 
-        user = authenticate(
-            username=attrs["username"],
-            password=attrs["password"]
-        )
+        try:
+            user = User.objects.get(user_id=attrs["userId"])
+            if not user.check_password(attrs["password"]):
+                raise User.DoesNotExist
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Invalid credentials")
 
-        if not user:
-            raise serializers.ValidationError(
-                "Invalid credentials"
-            )
-
+        print(user, "user")
+        
         if not user.email_verified:
             raise serializers.ValidationError(
                 "Email not verified"
             )
 
         attrs["user"] = user
+
+        print(attrs,"yes")
 
         return attrs
 
@@ -163,6 +165,8 @@ class LoginSerializer(serializers.Serializer):
         user = self.validated_data["user"]
 
         platform = self.validated_data["platform"]
+
+        print("yes1")
 
         device_name = request.headers.get(
             "User-Agent",
@@ -188,11 +192,14 @@ class LoginSerializer(serializers.Serializer):
 
         device_id = str(device.device_id)
 
+        print("yes2")
+
         access_token = create_access_token(
             user,
             device_id,
             platform
         )
+        print("yes3")
 
         refresh_token = create_refresh_token(
             user,
@@ -210,6 +217,7 @@ class LoginSerializer(serializers.Serializer):
                 "REMOTE_ADDR"
             )
         )
+        print("yes4")
 
         limit_user_sessions(
             user,
@@ -222,7 +230,7 @@ class LoginSerializer(serializers.Serializer):
             "platform": platform,
             "user": {
                 "id": user.id,
-                "username": user.username,
+                "userId": user.user_id,
                 "email": user.email
             }
         }
