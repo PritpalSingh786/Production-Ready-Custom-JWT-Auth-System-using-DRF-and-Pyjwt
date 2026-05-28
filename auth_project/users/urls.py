@@ -12,6 +12,8 @@ from .views import (
     DevicesView,
     SessionsView,
     AuthenticatedView,
+    PasswordResetPageView,
+    PasswordResetConfirmView
 )
 
 urlpatterns = [
@@ -28,6 +30,13 @@ urlpatterns = [
     path("devices/<int:device_id>/", DevicesView.as_view()),
     path("sessions/", SessionsView.as_view()),
     path("authenticated/", AuthenticatedView.as_view()),
+    path('reset-password/<str:user_id>/<str:token>/', 
+         PasswordResetPageView.as_view(), 
+         name='password_reset_page'),
+    
+    path('api/reset-password/', 
+         PasswordResetConfirmView.as_view(), 
+         name='password_reset_confirm'),
 ]
 
 """

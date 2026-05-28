@@ -41,6 +41,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 AUTH_USER_MODEL = "users.User"
+DOMAIN_URL = "http://localhost:8000"
 
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ISSUER = os.getenv("JWT_ISSUER", "my-app")
@@ -108,8 +109,8 @@ ROOT_URLCONF = "auth_project.urls"
 
 TEMPLATES = [
     {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

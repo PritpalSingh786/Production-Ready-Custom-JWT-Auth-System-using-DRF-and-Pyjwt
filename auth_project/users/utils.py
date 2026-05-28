@@ -1,15 +1,23 @@
 import jwt
 import uuid
-
+import json
+import redis
+import secrets
 from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 
-from .redis_token_manager import redis_token_manager
-
-
 User = get_user_model()
+
+# Redis connection
+redis_client = redis.Redis.from_url(
+    settings.REDIS_URL,
+    decode_responses=True,
+    socket_keepalive=True,
+    retry_on_timeout=True,
+    health_check_interval=30
+)
 
 
 def create_access_token(
@@ -102,9 +110,7 @@ def verify_token(
         if payload.get("type") != token_type:
             return None
 
-        if redis_token_manager.is_blacklisted(
-            payload.get("jti")
-        ):
+        if redis_client.get(f"blacklist:{payload.get('jti')}"):
             return None
 
         if (
@@ -156,8 +162,8 @@ async def averify_token(
         from asgiref.sync import sync_to_async
 
         is_blacklisted = await sync_to_async(
-            redis_token_manager.is_blacklisted
-        )(payload.get("jti"))
+            redis_client.get
+        )(f"blacklist:{payload.get('jti')}")
 
         if is_blacklisted:
             return None
@@ -203,121 +209,103 @@ def store_refresh_token(
             issuer=settings.JWT_ISSUER
         )
 
-        redis_token_manager.store_refresh_token(
-            user_id=user.id,
-            jti=payload.get("jti"),
-            device_id=(
-                str(device_id)
-                if device_id else None
-            ),
-            platform=platform,
-            device_name=device_name,
-            ip_address=ip_address
+        # Store in Redis Hash
+        user_tokens_key = f"hash-rt-for-user-{user.id}"
+        
+        token_data = {
+            "jti": payload.get("jti"),
+            "user_id": str(user.id),
+            "device_id": str(device_id) if device_id else None,
+            "platform": platform,
+            "device_name": device_name,
+            "ip_address": ip_address,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        redis_client.hset(
+            user_tokens_key,
+            payload.get("jti"),
+            json.dumps(token_data)
         )
+        
+        ttl_seconds = settings.REFRESH_TOKEN_LIFETIME * 24 * 60 * 60
+        redis_client.expire(user_tokens_key, ttl_seconds)
 
         return True
 
     except Exception as e:
         print(f"Error storing token: {e}")
-
         return False
+    
 
-
-def is_token_blacklisted(jti):
-
-    return redis_token_manager.is_blacklisted(
-        jti
+def generate_password_reset_token(user_id):
+    """Generate a secure token for password reset (expires in 3 minutes)"""
+    token = secrets.token_urlsafe(32)
+    
+    # Store in Redis with 3 minutes expiry
+    redis_client.setex(
+        f"pwd_reset:{user_id}:{token}",
+        180,  # 3 minutes = 180 seconds
+        token
     )
+    
+    return token
 
 
-def blacklist_token(
-    jti,
-    reason=None
-):
-    return redis_token_manager.blacklist_token(
-        jti,
-        reason or "revoked"
-    )
+def verify_password_reset_token(user_id, token):
+    print(user_id, "uuuuuuuuu")
+    print(token, "tttttttttt")
+    """Verify if token is valid"""
+    key = f"pwd_reset:{user_id}:{token}"
+    stored_token = redis_client.get(key)
+    print(stored_token, "sssss")
+    
+    if stored_token and stored_token == token:
+        print("delete")
+        # Delete token after verification (one-time use)
+        redis_client.delete(key)
+        return True
+    
+    return False
 
 
-def blacklist_token_by_value(
-    token_str,
-    reason=None
-):
-    return (
-        redis_token_manager
-        .blacklist_token_by_value(
-            token_str,
-            reason or "revoked"
-        )
-    )
+def change_user_password(user, new_password):
+    """Change user password"""
+    user.set_password(new_password)
+    user.save()
+    return True
 
 
-def get_active_tokens(user):
+def generate_verification_token(user_id):
+    """
+    Generate email verification token with 5 minutes expiry
+    """
+    token = secrets.token_urlsafe(32)
+    key = f"email_verify:{user_id}:{token}"
+    
+    token_data = {
+        "token": token,
+        "user_id": str(user_id),
+        "created_at": datetime.utcnow().isoformat(),
+        "expires_at": (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+    }
+    
+    # Store in Redis with 5 minutes expiry
+    redis_client.setex(key, 300, json.dumps(token_data))
+    
+    return token
 
-    return (
-        redis_token_manager
-        .get_user_active_tokens(user.id)
-    )
-
-
-def limit_user_sessions(
-    user,
-    max_sessions=5
-):
-    return (
-        redis_token_manager
-        .limit_user_sessions(
-            user.id,
-            max_sessions
-        )
-    )
-
-
-def logout_from_device(
-    user,
-    device_id
-):
-    return (
-        redis_token_manager
-        .revoke_device_tokens(
-            user.id,
-            str(device_id),
-            "manual_logout"
-        )
-    )
-
-
-def revoke_all_user_tokens(
-    user,
-    reason="revoked_all"
-):
-    return (
-        redis_token_manager
-        .revoke_all_user_tokens(
-            user.id,
-            reason
-        )
-    )
-
-
-def refresh_access_token(
-    refresh_token_str
-):
-    payload = verify_token(
-        refresh_token_str,
-        "refresh"
-    )
-
-    if not payload:
-        return None
-
-    user = User.objects.get(
-        id=payload["user_id"]
-    )
-
-    return create_access_token(
-        user,
-        payload.get("device_id"),
-        payload.get("platform")
-    )
+def verify_email_token(user_id, token):
+    """
+    Verify email verification token
+    Returns: (is_valid, message)
+    """
+    key = f"email_verify:{user_id}:{token}"
+    stored_data = redis_client.get(key)
+    
+    if stored_data:
+        # Delete token after verification (one-time use)
+        redis_client.delete(key)
+        return True, "Email verified successfully"
+    
+    return False, "Verification link has expired (5 minutes) or is invalid"

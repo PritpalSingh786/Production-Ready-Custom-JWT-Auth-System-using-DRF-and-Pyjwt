@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from django.contrib.auth import get_user_model, authenticate
-from django.contrib.auth.tokens import PasswordResetTokenGenerator
+# from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import (
     urlsafe_base64_encode,
     urlsafe_base64_decode
@@ -18,23 +18,20 @@ from .utils import (
     create_access_token,
     create_refresh_token,
     store_refresh_token,
-    limit_user_sessions,
-    blacklist_token_by_value,
-    get_active_tokens,
-    refresh_access_token,
     verify_token,
-    blacklist_token
 )
 from .redis_token_manager import redis_token_manager
 
 import datetime
 import re
 import uuid
+from .tasks import send_new_login_alert_task
+from .utils import generate_password_reset_token, generate_verification_token
 
 
 User = get_user_model()
 
-token_generator = PasswordResetTokenGenerator()
+# token_generator = PasswordResetTokenGenerator()
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -49,7 +46,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ["user_id", "email", "password"]
 
     def validate_user_id(self, value):
-
         if len(value) < 4:
             raise serializers.ValidationError(
                 "userId must be at least 4 characters long"
@@ -60,170 +56,178 @@ class RegisterSerializer(serializers.ModelSerializer):
                 "userId can contain only letters, numbers and underscore"
             )
 
-        if User.objects.filter(
-             user_id__iexact=value
-        ).exists():
-            raise serializers.ValidationError(
-                "userId already exists"
-            )
+        if User.objects.filter(user_id__iexact=value).exists():
+            raise serializers.ValidationError("userId already exists")
 
         return value
-
     
     def validate_email(self, value):
-        
         email_regex = (
-        r"^[a-zA-Z0-9._%+-]+"
-        r"@[a-zA-Z0-9.-]+"
-        r"\.[a-zA-Z]{2,}$"
+            r"^[a-zA-Z0-9._%+-]+"
+            r"@[a-zA-Z0-9.-]+"
+            r"\.[a-zA-Z]{2,}$"
         )
         if not re.match(email_regex, value):
-            raise serializers.ValidationError(
-                "Enter a valid email address"
-                )
-        if User.objects.filter(
-            email__iexact=value
-            ).exists():
-            raise serializers.ValidationError(
-            "Email already exists"
-            )
+            raise serializers.ValidationError("Enter a valid email address")
+            
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("Email already exists")
+            
         return value
 
+    def create(self, validated_data):
+        """
+        Create user with email verification
+        """
+        try:
+            # Create user (inactive until email verified)
+            user = User.objects.create_user(
+                user_id=validated_data["user_id"],
+                email=validated_data["email"],
+                password=validated_data["password"],
+                is_active=False,
+                email_verified=False
+            )
+            
+            return user
+            
+        except Exception as e:
+            raise serializers.ValidationError(
+                f"Error creating user: {str(e)}"
+            )
+    
+    def send_verification_email(self, user):
+        """
+        Send verification email with 5 minutes expiry
+        """
+        try:
+            # Generate Redis token (5 minutes expiry)
+            token = generate_verification_token(user.id)
+            
+            # Create verification link for frontend
+            verification_link = f"{settings.FRONTEND_URL}/verify-email?user_id={user.user_id}&token={token}"
+            
+            # Expiry time for email
+            expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+            
+            message = f"""
+            Hello {user.user_id},
+
+            Thank you for registering!
+
+            Please verify your email address by clicking the link below:
+
+            🔗 {verification_link}
+
+            ⏰ This link will expire in 5 minutes (at {expire.strftime('%H:%M:%S UTC')}).
+
+            If you did not create this account, please ignore this email.
+
+            Best regards,
+            Your Team
+            """
+            
+            # Send email asynchronously
+            send_email_task.delay(
+                "Verify Your Email - 5 Minutes Expiry",
+                message,
+                [user.email]
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error sending verification email: {e}")
+            return False
 
     def save(self, **kwargs):
-
-        user = User.objects.create_user(
-            user_id=self.validated_data["user_id"],
-            email=self.validated_data["email"],
-            password=self.validated_data["password"]
-        )
-
-        uid = urlsafe_base64_encode(
-            force_bytes(user.pk)
-        )
-
-        token = token_generator.make_token(user)
-
-        expire = (
-            datetime.datetime.utcnow() +
-            datetime.timedelta(hours=24)
-        )
-
-        link = (
-            f"{settings.FRONTEND_URL}"
-            f"/verify-email/{uid}/{token}/"
-        )
-
-        message = (
-            f"Verify before {expire} UTC: {link}"
-        )
-
-        send_email_task.delay(
-            "Verify Email",
-            message,
-            [user.email]
-        )
-
+        """
+        Save user and send verification email
+        """
+        user = self.create(self.validated_data)
+        self.send_verification_email(user)
         return user
 
-
 class LoginSerializer(serializers.Serializer):
-
     userId = serializers.CharField()
-
-    password = serializers.CharField(
-        write_only=True
-    )
-
+    password = serializers.CharField(write_only=True)
     platform = serializers.CharField()
 
     def validate(self, attrs):
-        print(attrs, "attrrrrr")
-
         try:
             user = User.objects.get(user_id=attrs["userId"])
             if not user.check_password(attrs["password"]):
                 raise User.DoesNotExist
         except User.DoesNotExist:
             raise serializers.ValidationError("Invalid credentials")
-
-        print(user, "user")
         
         if not user.email_verified:
-            raise serializers.ValidationError(
-                "Email not verified"
-            )
+            raise serializers.ValidationError("Email not verified")
 
         attrs["user"] = user
-
-        print(attrs,"yes")
-
         return attrs
 
     def save(self, request):
-
         user = self.validated_data["user"]
-
         platform = self.validated_data["platform"]
-
-        print("yes1")
-
-        device_name = request.headers.get(
-            "User-Agent",
-            "Unknown"
-        )
-
+        
+        # Get device name
+        device_name = request.headers.get("User-Agent", "Unknown")
+        
+        # Get real IP address
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip_address = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip_address = request.META.get('REMOTE_ADDR')
+        
+        # Check if device already exists
         device, created = Device.objects.get_or_create(
             user=user,
             device_name=device_name,
             defaults={
-                "ip_address": request.META.get(
-                    "REMOTE_ADDR"
-                ),
+                "ip_address": ip_address,
                 "device_id": uuid.uuid4()
             }
         )
-
-        device.ip_address = request.META.get(
-            "REMOTE_ADDR"
-        )
-
+        
+        # Update IP address
+        device.ip_address = ip_address
         device.save()
-
         device_id = str(device.device_id)
+        
+        # Send alert if new device/login
+        if device:
+            # Generate password reset token (expires in 3 minutes)
+            reset_token = generate_password_reset_token(user.id)
 
-        print("yes2")
-
-        access_token = create_access_token(
-            user,
-            device_id,
-            platform
-        )
-        print("yes3")
-
-        refresh_token = create_refresh_token(
-            user,
-            device_id,
-            platform
-        )
-
+            print("start")
+            
+            # Send email asynchronously
+            send_new_login_alert_task.delay(
+                user_email=user.email,
+                user_name=user.id,
+                device_name=device_name,
+                ip_address=ip_address,
+                platform=platform,
+                reset_token=reset_token
+            )
+        
+        # Create tokens
+        access_token = create_access_token(user, device_id, platform)
+        refresh_token = create_refresh_token(user, device_id, platform)
+        print("hellooooooo")
+        
+        # Store refresh token
         store_refresh_token(
             refresh_token,
             user,
             device_id,
             platform,
             device_name=device_name,
-            ip_address=request.META.get(
-                "REMOTE_ADDR"
-            )
+            ip_address=ip_address
         )
-        print("yes4")
-
-        limit_user_sessions(
-            user,
-            max_sessions=5
-        )
-
+        
         return {
             "access": access_token,
             "refresh": refresh_token,
@@ -276,11 +280,6 @@ class RefreshTokenSerializer(serializers.Serializer):
         old_refresh_token = self.validated_data[
             "refresh_token"
         ]
-
-        blacklist_token_by_value(
-            old_refresh_token,
-            reason="rotated"
-        )
 
         user = User.objects.get(
             id=payload["user_id"]
@@ -367,14 +366,9 @@ class LogoutSerializer(serializers.Serializer):
         )
 
         if refresh_token:
-            blacklist_token_by_value(
-                refresh_token,
-                reason="logout"
-            )
-
-        return {
-            "msg": "Logged out successfully"
-        }
+            return {
+                "msg": "Logged out successfully"
+                }
 
 
 class PasswordResetRequestSerializer(

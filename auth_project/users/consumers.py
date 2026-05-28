@@ -1,3 +1,4 @@
+# consumers.py
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from users.utils import averify_token
@@ -7,7 +8,6 @@ class AuthConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
         query_string = self.scope["query_string"].decode()
-
         token = None
 
         if "token=" in query_string:
@@ -18,7 +18,6 @@ class AuthConsumer(AsyncWebsocketConsumer):
 
         if token:
             payload = await averify_token(token, "access")
-
             if payload:
                 user_id = payload.get("user_id")
                 device_id = payload.get("device_id")
@@ -29,7 +28,6 @@ class AuthConsumer(AsyncWebsocketConsumer):
 
         self.user_id = user_id
         self.device_id = device_id
-
         self.group_name = f"user_{user_id}_{device_id}"
 
         await self.channel_layer.group_add(
@@ -52,14 +50,11 @@ class AuthConsumer(AsyncWebsocketConsumer):
                 self.group_name,
                 self.channel_name
             )
-
-    async def session_killed(self, event):
-        await self.send(
-            text_data=json.dumps({
-                "type": "SESSION_KILLED",
-                "message": event.get(
-                    "message",
-                    "Your session has been terminated"
-                )
-            })
-        )
+    
+    async def logout_notification(self, event):
+        """Receive logout notification from channel layer"""
+        await self.send(text_data=json.dumps({
+            "type": "LOGOUT",
+            "message": event["message"],
+            "action": "redirect_login"
+        }))

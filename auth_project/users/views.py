@@ -38,16 +38,17 @@ from .serializers import (
 
 from .models import Device
 
-from .utils import (
-    get_active_tokens,
-    logout_from_device
-)
+from .utils import verify_email_token, verify_password_reset_token, change_user_password
+from .tasks import send_password_changed_email_task, logout_all_devices_task
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.views import View
+import json
 
 
 User = get_user_model()
 
 token_generator = PasswordResetTokenGenerator()
-
 
 class RegisterView(APIView):
 
@@ -61,25 +62,29 @@ class RegisterView(APIView):
         )
     )
     def post(self, request):
-
-        serializer = RegisterSerializer(
-            data=request.data
-        )
-
-        serializer.is_valid(
-            raise_exception=True
-        )
-
-        serializer.save()
-
+        serializer = RegisterSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            user = serializer.save()
+            
+            return Response(
+                {
+                    "success": True,
+                    "message": "Registration successful. Please check your email for verification link (expires in 5 minutes).",
+                    "data": {
+                        "user_id": user.user_id,
+                        "email": user.email
+                    }
+                },
+                status=status.HTTP_201_CREATED
+            )
+        
         return Response(
             {
-                "msg": (
-                    "Registration successful. "
-                    "Check your email."
-                )
+                "success": False,
+                "errors": serializer.errors
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_400_BAD_REQUEST
         )
 
 
@@ -87,47 +92,91 @@ class VerifyEmailView(APIView):
 
     permission_classes = [AllowAny]
 
-    def get(
-        self,
-        request,
-        uidb64,
-        token
-    ):
-        try:
-            uid = force_str(
-                urlsafe_base64_decode(uidb64)
-            )
-
-            user = User.objects.get(pk=uid)
-
-        except Exception:
+    def get(self, request):
+        user_id = request.query_params.get('user_id')
+        token = request.query_params.get('token')
+        
+        if not user_id or not token:
             return Response(
-                {"error": "Invalid link"},
+                {"error": "user_id and token are required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        if token_generator.check_token(
-            user,
-            token
-        ):
+        
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Verify Redis token
+        is_valid, message = verify_email_token(user.id, token)
+        
+        if is_valid:
             user.email_verified = True
-
+            user.is_active = True
             user.save()
-
+            
             return Response({
-                "msg": (
-                    "Email verified successfully"
-                )
-            })
-
+                "success": True,
+                "message": "Email verified successfully. You can now login."
+            }, status=status.HTTP_200_OK)
+        
         return Response(
             {
-                "error": (
-                    "Invalid or expired token"
-                )
+                "success": False, 
+                "error": message,
+                "expiry_minutes": 5
             },
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+class ResendVerificationEmailView(APIView):
+    """Resend verification email with new 5-minute token"""
+    
+    permission_classes = [AllowAny]
+    
+    @method_decorator(
+        ratelimit(
+            key="ip",
+            rate="2/m",
+            block=True
+        )
+    )
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        email = request.data.get('email')
+        
+        if not user_id or not email:
+            return Response(
+                {"error": "user_id and email are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = User.objects.get(user_id=user_id, email=email)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found with provided credentials"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if user.email_verified:
+            return Response(
+                {"error": "Email already verified. Please login."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Reuse serializer to send email
+        serializer = RegisterSerializer()
+        serializer.send_verification_email(user)
+        
+        return Response({
+            "success": True,
+            "message": "Verification email resent successfully. Valid for 5 minutes."
+        }, status=status.HTTP_200_OK)
 
 
 class LoginView(APIView):
@@ -176,6 +225,93 @@ class LoginView(APIView):
             )
 
         return response
+    
+
+class PasswordResetPageView(View):
+    """Render password reset template"""
+    
+    def get(self, request, user_id, token):
+        # Verify token is valid
+        if not verify_password_reset_token(user_id, token):
+            return render(request, 'users/error.html', {
+                'message': 'Invalid or expired link. Please request a new one.'
+            })
+        
+        return render(request, 'users/reset_password.html', {
+            'user_id': user_id,
+            'token': token
+        })
+
+
+class PasswordResetConfirmView(APIView):
+    """Handle password reset form submission"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        print("starttttttt")
+        try:
+            print("startttttttt")
+            # Parse request data
+            user_id = request.data.get('user_id')
+            token = request.data.get('token')
+            current_password = request.data.get('current_password')
+            new_password = request.data.get('new_password')
+            confirm_password = request.data.get('confirm_password')
+            
+            # Validate all fields present
+            if not all([user_id, token, current_password, new_password, confirm_password]):
+                return Response({
+                    'error': 'All fields are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate passwords match
+            if new_password != confirm_password:
+                return Response({
+                    'error': 'New passwords do not match'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate password length
+            if len(new_password) < 8:
+                return Response({
+                    'error': 'Password must be at least 8 characters'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get user
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({
+                    'error': 'User not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Verify current password
+            if not user.check_password(current_password):
+                return Response({
+                    'error': 'Current password is incorrect'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Change password
+            change_user_password(user, new_password)
+            
+            # Send email notification (async)
+            send_password_changed_email_task.delay(
+                user_email=user.email,
+                user_name=user.user_id
+            )
+            
+            # Logout from all devices (async)
+            logout_all_devices_task.delay(user_id)
+            
+            return Response({
+                'success': True,
+                'message': 'Password changed successfully! You have been logged out from all devices.',
+                'redirect': '/login/'
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class RefreshTokenView(APIView):
