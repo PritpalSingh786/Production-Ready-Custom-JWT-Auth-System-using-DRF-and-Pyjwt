@@ -10,9 +10,6 @@ from channels.middleware import BaseMiddleware
 from asgiref.sync import sync_to_async
 
 from users.models import User
-from users.redis_token_manager import (
-    redis_token_manager
-)
 
 
 class JWTAuthMiddleware(BaseMiddleware):
@@ -50,25 +47,6 @@ class JWTAuthMiddleware(BaseMiddleware):
                     audience=settings.JWT_AUDIENCE,
                     issuer=settings.JWT_ISSUER
                 )
-
-                jti = payload.get("jti")
-
-                if jti:
-
-                    is_blacklisted = (
-                        await sync_to_async(
-                            redis_token_manager
-                            .is_blacklisted
-                        )(jti)
-                    )
-
-                    if is_blacklisted:
-                        await send({
-                            "type": "websocket.close",
-                            "code": 4001
-                        })
-
-                        return
 
                 user = await sync_to_async(
                     User.objects.get

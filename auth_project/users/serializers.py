@@ -1,7 +1,6 @@
 from rest_framework import serializers
 
 from django.contrib.auth import get_user_model, authenticate
-# from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import (
     urlsafe_base64_encode,
     urlsafe_base64_decode
@@ -20,7 +19,6 @@ from .utils import (
     store_refresh_token,
     verify_token,
 )
-from .redis_token_manager import redis_token_manager
 
 import datetime
 import re
@@ -32,6 +30,57 @@ from .utils import generate_password_reset_token, generate_verification_token
 User = get_user_model()
 
 # token_generator = PasswordResetTokenGenerator()
+
+
+def send_verification_email(user):
+    """
+    Send verification email with 5 minutes expiry
+    
+    Args:
+        user: User object with user_id, email, and id attributes
+    
+    Returns:
+        bool: True if email sent successfully, False otherwise
+    """
+    try:
+        # Generate Redis token (5 minutes expiry)
+        token = generate_verification_token(user.id)
+        
+        # Create verification link for frontend
+        verification_link = f"{settings.DOMAIN_URL}/verify-email?user_id={user.user_id}&token={token}"
+        
+        # Expiry time for email
+        expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+        
+        message = f"""
+        Hello {user.user_id},
+
+        Thank you for registering!
+
+        Please verify your email address by clicking the link below:
+
+        🔗 {verification_link}
+
+        ⏰ This link will expire in 5 minutes (at {expire.strftime('%H:%M:%S UTC')}).
+
+        If you did not create this account, please ignore this email.
+
+        Best regards,
+        Your Team
+        """
+        
+        # Send email asynchronously
+        send_email_task.delay(
+            "Verify Your Email - 5 Minutes Expiry",
+            message,
+            [user.email]
+        )
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error sending verification email: {e}")
+        return False
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -95,57 +144,13 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 f"Error creating user: {str(e)}"
             )
-    
-    def send_verification_email(self, user):
-        """
-        Send verification email with 5 minutes expiry
-        """
-        try:
-            # Generate Redis token (5 minutes expiry)
-            token = generate_verification_token(user.id)
-            
-            # Create verification link for frontend
-            verification_link = f"{settings.FRONTEND_URL}/verify-email?user_id={user.user_id}&token={token}"
-            
-            # Expiry time for email
-            expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
-            
-            message = f"""
-            Hello {user.user_id},
-
-            Thank you for registering!
-
-            Please verify your email address by clicking the link below:
-
-            🔗 {verification_link}
-
-            ⏰ This link will expire in 5 minutes (at {expire.strftime('%H:%M:%S UTC')}).
-
-            If you did not create this account, please ignore this email.
-
-            Best regards,
-            Your Team
-            """
-            
-            # Send email asynchronously
-            send_email_task.delay(
-                "Verify Your Email - 5 Minutes Expiry",
-                message,
-                [user.email]
-            )
-            
-            return True
-            
-        except Exception as e:
-            print(f"Error sending verification email: {e}")
-            return False
 
     def save(self, **kwargs):
         """
         Save user and send verification email
         """
         user = self.create(self.validated_data)
-        self.send_verification_email(user)
+        send_verification_email(user)
         return user
 
 class LoginSerializer(serializers.Serializer):
@@ -156,14 +161,15 @@ class LoginSerializer(serializers.Serializer):
     def validate(self, attrs):
         try:
             user = User.objects.get(user_id=attrs["userId"])
+            print(user,"userrrrrr")
             if not user.check_password(attrs["password"]):
                 raise User.DoesNotExist
         except User.DoesNotExist:
             raise serializers.ValidationError("Invalid credentials")
         
         if not user.email_verified:
-            raise serializers.ValidationError("Email not verified")
-
+            send_verification_email(user)
+            raise serializers.ValidationError("Email not verified. A verification link has been sent to your email. Please verify your email before logging in.")
         attrs["user"] = user
         return attrs
 
@@ -348,19 +354,6 @@ class LogoutSerializer(serializers.Serializer):
             False
         )
 
-        if all_devices:
-            count = (
-                redis_token_manager
-                .revoke_all_user_tokens(
-                    user.id,
-                    "logout_all_devices"
-                )
-            )
-
-            return {
-                "msg": f"Logged out from {count} devices"
-            }
-
         refresh_token = self.validated_data.get(
             "refresh"
         )
@@ -371,210 +364,3 @@ class LogoutSerializer(serializers.Serializer):
                 }
 
 
-class PasswordResetRequestSerializer(
-    serializers.Serializer
-):
-
-    email = serializers.EmailField()
-
-    def save(self):
-
-        email = self.validated_data["email"]
-
-        user = User.objects.filter(
-            email=email
-        ).first()
-
-        if not user:
-            return
-
-        uid = urlsafe_base64_encode(
-            force_bytes(user.pk)
-        )
-
-        token = token_generator.make_token(user)
-
-        expire = (
-            datetime.datetime.utcnow() +
-            datetime.timedelta(hours=2)
-        )
-
-        link = (
-            f"{settings.FRONTEND_URL}"
-            f"/reset-password/{uid}/{token}/"
-        )
-
-        send_email_task.delay(
-            "Reset Password",
-            f"Reset before {expire} UTC: {link}",
-            [user.email]
-        )
-
-
-class SetNewPasswordSerializer(
-    serializers.Serializer
-):
-
-    password = serializers.CharField(
-        write_only=True
-    )
-
-    uidb64 = serializers.CharField()
-
-    token = serializers.CharField()
-
-    def validate(self, attrs):
-
-        try:
-            uid = force_str(
-                urlsafe_base64_decode(
-                    attrs["uidb64"]
-                )
-            )
-
-            user = User.objects.get(pk=uid)
-
-        except Exception:
-            raise serializers.ValidationError(
-                "Invalid link"
-            )
-
-        if not token_generator.check_token(
-            user,
-            attrs["token"]
-        ):
-            raise serializers.ValidationError(
-                "Invalid or expired token"
-            )
-
-        attrs["user"] = user
-
-        return attrs
-
-    def save(self):
-
-        user = self.validated_data["user"]
-
-        user.set_password(
-            self.validated_data["password"]
-        )
-
-        user.save()
-
-        redis_token_manager.revoke_all_user_tokens(
-            user.id,
-            "password_changed"
-        )
-
-
-class ChangePasswordSerializer(
-    serializers.Serializer
-):
-
-    old_password = serializers.CharField(
-        write_only=True
-    )
-
-    new_password = serializers.CharField(
-        write_only=True,
-        min_length=6
-    )
-
-    def validate(self, attrs):
-
-        user = self.context["request"].user
-
-        if not user.check_password(
-            attrs["old_password"]
-        ):
-            raise serializers.ValidationError({
-                "old_password": "Wrong password"
-            })
-
-        return attrs
-
-    def save(self):
-
-        user = self.context["request"].user
-
-        user.set_password(
-            self.validated_data["new_password"]
-        )
-
-        user.save()
-
-        redis_token_manager.revoke_all_user_tokens(
-            user.id,
-            "password_changed"
-        )
-
-
-class UserProfileSerializer(
-    serializers.ModelSerializer
-):
-
-    class Meta:
-        model = User
-
-        fields = [
-            "id",
-            "username",
-            "email",
-            "email_verified",
-            "date_joined"
-        ]
-
-        read_only_fields = [
-            "id",
-            "email_verified",
-            "date_joined"
-        ]
-
-
-class DeviceSerializer(
-    serializers.ModelSerializer
-):
-
-    class Meta:
-        model = Device
-
-        fields = [
-            "id",
-            "device_name",
-            "device_id",
-            "last_login",
-            "ip_address"
-        ]
-
-
-class SessionSerializer(
-    serializers.Serializer
-):
-
-    device_id = serializers.CharField()
-
-    platform = serializers.CharField()
-
-    created_at = serializers.CharField()
-
-    device_name = serializers.CharField()
-
-    def to_representation(self, instance):
-
-        return {
-            "device_id": instance.get(
-                "device_id"
-            ),
-            "platform": instance.get(
-                "platform"
-            ),
-            "device_name": instance.get(
-                "device_name"
-            ),
-            "created_at": instance.get(
-                "created_at"
-            ),
-            "ip_address": instance.get(
-                "ip_address"
-            )
-        }

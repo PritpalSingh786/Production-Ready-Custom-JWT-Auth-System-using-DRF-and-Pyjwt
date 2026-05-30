@@ -6,8 +6,6 @@ from django.contrib.auth import get_user_model
 
 from rest_framework import authentication, exceptions
 
-from .redis_token_manager import redis_token_manager
-
 
 User = get_user_model()
 
@@ -26,9 +24,6 @@ def verify_token(token, token_type="access"):
         )
 
         if payload.get("type") != token_type:
-            return None
-
-        if redis_token_manager.is_blacklisted(payload.get("jti")):
             return None
 
         if payload["exp"] < datetime.utcnow().timestamp():

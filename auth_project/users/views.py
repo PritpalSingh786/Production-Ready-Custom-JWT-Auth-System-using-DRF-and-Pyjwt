@@ -8,13 +8,6 @@ from rest_framework.permissions import (
 )
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import (
-    PasswordResetTokenGenerator
-)
-
-from django.utils.http import (
-    urlsafe_base64_decode
-)
 
 from django.utils.encoding import force_str
 
@@ -28,27 +21,15 @@ from .serializers import (
     LoginSerializer,
     RefreshTokenSerializer,
     LogoutSerializer,
-    PasswordResetRequestSerializer,
-    SetNewPasswordSerializer,
-    ChangePasswordSerializer,
-    UserProfileSerializer,
-    DeviceSerializer,
-    SessionSerializer
 )
-
-from .models import Device
 
 from .utils import verify_email_token, verify_password_reset_token, change_user_password
 from .tasks import send_password_changed_email_task, logout_all_devices_task
 from django.shortcuts import render
-from django.http import JsonResponse
 from django.views import View
-import json
 
 
 User = get_user_model()
-
-token_generator = PasswordResetTokenGenerator()
 
 class RegisterView(APIView):
 
@@ -88,95 +69,46 @@ class RegisterView(APIView):
         )
 
 
-class VerifyEmailView(APIView):
-
-    permission_classes = [AllowAny]
-
+class VerifyEmailPageView(View):
+    """Render email verification template"""
+    
     def get(self, request):
-        user_id = request.query_params.get('user_id')
-        token = request.query_params.get('token')
+        user_id = request.GET.get('user_id')
+        token = request.GET.get('token')
         
+        # Check if parameters are missing
         if not user_id or not token:
-            return Response(
-                {"error": "user_id and token are required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return render(request, 'users/email_verification_error.html', {
+                'message': 'Invalid verification link. Missing required parameters.'
+            })
         
+        # Get user
         try:
             user = User.objects.get(user_id=user_id)
         except User.DoesNotExist:
-            return Response(
-                {"error": "User not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return render(request, 'users/email_verification_error.html', {
+                'message': 'User not found. The verification link may be invalid.'
+            })
         
         # Verify Redis token
         is_valid, message = verify_email_token(user.id, token)
         
         if is_valid:
+            # Activate user account
             user.email_verified = True
             user.is_active = True
             user.save()
             
-            return Response({
-                "success": True,
-                "message": "Email verified successfully. You can now login."
-            }, status=status.HTTP_200_OK)
-        
-        return Response(
-            {
-                "success": False, 
-                "error": message,
-                "expiry_minutes": 5
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-
-class ResendVerificationEmailView(APIView):
-    """Resend verification email with new 5-minute token"""
-    
-    permission_classes = [AllowAny]
-    
-    @method_decorator(
-        ratelimit(
-            key="ip",
-            rate="2/m",
-            block=True
-        )
-    )
-    def post(self, request):
-        user_id = request.data.get('user_id')
-        email = request.data.get('email')
-        
-        if not user_id or not email:
-            return Response(
-                {"error": "user_id and email are required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            user = User.objects.get(user_id=user_id, email=email)
-        except User.DoesNotExist:
-            return Response(
-                {"error": "User not found with provided credentials"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        if user.email_verified:
-            return Response(
-                {"error": "Email already verified. Please login."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Reuse serializer to send email
-        serializer = RegisterSerializer()
-        serializer.send_verification_email(user)
-        
-        return Response({
-            "success": True,
-            "message": "Verification email resent successfully. Valid for 5 minutes."
-        }, status=status.HTTP_200_OK)
+            # Render success page
+            return render(request, 'users/email_verification_success.html', {
+                'user_id': user.user_id,
+                'email': user.email
+            })
+        else:
+            # Render error page
+            return render(request, 'users/email_verification_error.html', {
+                'message': message
+            })
 
 
 class LoginView(APIView):
@@ -435,255 +367,6 @@ class LogoutView(APIView):
         return response
 
 
-class PasswordResetRequestView(APIView):
-
-    permission_classes = [AllowAny]
-
-    @method_decorator(
-        ratelimit(
-            key="ip",
-            rate="3/m",
-            block=True
-        )
-    )
-    def post(self, request):
-
-        serializer = (
-            PasswordResetRequestSerializer(
-                data=request.data
-            )
-        )
-
-        serializer.is_valid(
-            raise_exception=True
-        )
-
-        serializer.save()
-
-        return Response(
-            {
-                "msg": (
-                    "If account exists, "
-                    "email sent"
-                )
-            },
-            status=status.HTTP_200_OK
-        )
-
-
-class SetNewPasswordView(APIView):
-
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-
-        serializer = (
-            SetNewPasswordSerializer(
-                data=request.data
-            )
-        )
-
-        serializer.is_valid(
-            raise_exception=True
-        )
-
-        serializer.save()
-
-        return Response(
-            {
-                "msg": (
-                    "Password reset successful"
-                )
-            },
-            status=status.HTTP_200_OK
-        )
-
-
-class ChangePasswordView(APIView):
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-
-        serializer = (
-            ChangePasswordSerializer(
-                data=request.data,
-                context={
-                    "request": request
-                }
-            )
-        )
-
-        serializer.is_valid(
-            raise_exception=True
-        )
-
-        serializer.save()
-
-        return Response(
-            {
-                "msg": (
-                    "Password changed "
-                    "successfully. "
-                    "Please login again."
-                )
-            },
-            status=status.HTTP_200_OK
-        )
-
-
-class ProfileView(APIView):
-
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-
-        serializer = (
-            UserProfileSerializer(
-                request.user
-            )
-        )
-
-        return Response(serializer.data)
-
-    def put(self, request):
-
-        serializer = (
-            UserProfileSerializer(
-                request.user,
-                data=request.data,
-                partial=True
-            )
-        )
-
-        serializer.is_valid(
-            raise_exception=True
-        )
-
-        if (
-            "email" in serializer.validated_data
-            and
-            serializer.validated_data[
-                "email"
-            ] != request.user.email
-        ):
-            return Response(
-                {
-                    "error": (
-                        "Email cannot be changed"
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        serializer.save()
-
-        return Response(serializer.data)
-
-
-class DevicesView(APIView):
-
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-
-        devices = Device.objects.filter(
-            user=request.user
-        )
-
-        serializer = DeviceSerializer(
-            devices,
-            many=True
-        )
-
-        return Response(serializer.data)
-
-    def delete(
-        self,
-        request,
-        device_id=None
-    ):
-        if device_id:
-
-            try:
-                device = Device.objects.get(
-                    id=device_id,
-                    user=request.user
-                )
-
-                logout_from_device(
-                    request.user,
-                    str(device.device_id)
-                )
-
-                device.delete()
-
-                return Response({
-                    "msg": "Device removed"
-                })
-
-            except Device.DoesNotExist:
-                return Response(
-                    {
-                        "error": (
-                            "Device not found"
-                        )
-                    },
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-        else:
-            current_device_id = getattr(
-                request,
-                "device_id",
-                None
-            )
-
-            devices = Device.objects.filter(
-                user=request.user
-            )
-
-            if current_device_id:
-                devices = devices.exclude(
-                    device_id=current_device_id
-                )
-
-            count = devices.count()
-
-            for device in devices:
-                logout_from_device(
-                    request.user,
-                    str(device.device_id)
-                )
-
-                device.delete()
-
-            return Response({
-                "msg": (
-                    f"Removed {count} "
-                    f"other devices"
-                )
-            })
-
-
-class SessionsView(APIView):
-
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-
-        sessions = get_active_tokens(
-            request.user
-        )
-
-        serializer = SessionSerializer(
-            sessions,
-            many=True
-        )
-
-        return Response(serializer.data)
-
-
 class AuthenticatedView(APIView):
 
     permission_classes = [IsAuthenticated]
@@ -696,8 +379,8 @@ class AuthenticatedView(APIView):
             ),
             "user": {
                 "id": request.user.id,
-                "username": (
-                    request.user.username
+                "userId": (
+                    request.user.user_id
                 ),
                 "email": request.user.email
             },
