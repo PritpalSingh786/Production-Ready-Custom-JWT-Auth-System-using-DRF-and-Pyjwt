@@ -9,8 +9,6 @@ from rest_framework.permissions import (
 
 from django.contrib.auth import get_user_model
 
-from django.utils.encoding import force_str
-
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import (
     method_decorator
@@ -247,33 +245,18 @@ class PasswordResetConfirmView(APIView):
 
 
 class RefreshTokenView(APIView):
-
     permission_classes = [AllowAny]
 
     def post(self, request):
-
-        platform = request.data.get(
-            "platform"
-        )
+        platform = request.data.get("platform")
 
         if platform == "web":
             refresh_token = request.COOKIES.get(
                 "refresh_token"
             )
-
         else:
             refresh_token = request.data.get(
                 "refresh"
-            )
-
-        if not refresh_token:
-            return Response(
-                {
-                    "error": (
-                        "Refresh token required"
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST
             )
 
         serializer = RefreshTokenSerializer(
@@ -287,53 +270,43 @@ class RefreshTokenView(APIView):
             raise_exception=True
         )
 
-        data = serializer.save()
+        tokens = serializer.save()
 
-        response = Response({
-            "access": data["access"]
-        })
+        response = Response(
+            {
+                "access": tokens["access"]
+            },
+            status=status.HTTP_200_OK
+        )
 
         if platform == "web":
-
             response.set_cookie(
                 key="refresh_token",
-                value=data["refresh"],
+                value=tokens["refresh"],
                 httponly=True,
                 secure=False,
                 samesite="Lax",
                 max_age=7 * 24 * 60 * 60,
                 path="/api/users/"
             )
-
         else:
             response.data["refresh"] = (
-                data["refresh"]
+                tokens["refresh"]
             )
 
         return response
 
 
 class LogoutView(APIView):
-
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def post(self, request):
-
-        platform = request.data.get(
-            "platform",
-            "web"
-        )
-
-        all_devices = request.data.get(
-            "all_devices",
-            False
-        )
+        platform = request.data.get("platform")
 
         if platform == "web":
             refresh_token = request.COOKIES.get(
                 "refresh_token"
             )
-
         else:
             refresh_token = request.data.get(
                 "refresh"
@@ -341,9 +314,7 @@ class LogoutView(APIView):
 
         serializer = LogoutSerializer(
             data={
-                "refresh": refresh_token,
-                "platform": platform,
-                "all_devices": all_devices
+                "refresh": refresh_token
             }
         )
 
@@ -351,16 +322,16 @@ class LogoutView(APIView):
             raise_exception=True
         )
 
-        result = serializer.save(
-            request.user,
-            request
-        )
+        data = serializer.save()
 
-        response = Response(result)
+        response = Response(
+            data,
+            status=status.HTTP_200_OK
+        )
 
         if platform == "web":
             response.delete_cookie(
-                "refresh_token",
+                key="refresh_token",
                 path="/api/users/"
             )
 

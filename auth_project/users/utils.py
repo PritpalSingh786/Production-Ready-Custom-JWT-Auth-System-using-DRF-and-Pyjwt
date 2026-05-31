@@ -84,41 +84,31 @@ def create_refresh_token(
     )
 
 
-def verify_token(
-    token,
-    token_type="access"
-):
+def verify_token(token, token_type="access"):
     try:
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
-            algorithms=[
-                settings.JWT_ALGORITHM
-            ],
+            algorithms=[settings.JWT_ALGORITHM],
             audience=settings.JWT_AUDIENCE,
             issuer=settings.JWT_ISSUER,
             options={
-                "require": [
-                    "exp",
-                    "iat",
-                    "jti",
-                    "type"
-                ]
+                "require": ["exp", "iat", "jti", "type"]
             }
         )
 
         if payload.get("type") != token_type:
             return None
 
+        # Check blacklist (optional)
         if redis_client.get(f"blacklist:{payload.get('jti')}"):
             return None
 
-        if (
-            payload["exp"] <
-            datetime.utcnow().timestamp()
-        ):
+        # Check expiration
+        if payload["exp"] < datetime.utcnow().timestamp():
             return None
 
+        # Check user exists
         user_exists = User.objects.filter(
             id=payload["user_id"],
             is_active=True
@@ -129,6 +119,21 @@ def verify_token(
 
         return payload
 
+    except jwt.ExpiredSignatureError:
+        # Token expired - still return payload for cleanup
+        try:
+            # Decode without expiration validation
+            payload = jwt.decode(
+                token,
+                settings.SECRET_KEY,
+                algorithms=[settings.JWT_ALGORITHM],
+                audience=settings.JWT_AUDIENCE,
+                issuer=settings.JWT_ISSUER,
+                options={"verify_exp": False}
+            )
+            return payload
+        except:
+            return None
     except Exception:
         return None
 
@@ -239,16 +244,14 @@ def store_refresh_token(
     
 
 def generate_password_reset_token(user_id):
-    """Generate a secure token for password reset (expires in 3 minutes)"""
     token = secrets.token_urlsafe(32)
-    
-    # Store in Redis with 3 minutes expiry
+
     redis_client.setex(
-        f"pwd_reset:{user_id}:{token}",
-        180,  # 3 minutes = 180 seconds
+        f"pwd_reset:{user_id}",
+        180,
         token
     )
-    
+
     return token
 
 

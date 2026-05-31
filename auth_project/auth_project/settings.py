@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import redis 
 
 load_dotenv()
 
@@ -62,6 +63,11 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+REDIS_CLIENT = redis.from_url(
+    REDIS_URL,
+    decode_responses=True
+)
 
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL

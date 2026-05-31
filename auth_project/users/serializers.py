@@ -1,16 +1,5 @@
 from rest_framework import serializers
-
-from django.contrib.auth import get_user_model, authenticate
-from django.utils.http import (
-    urlsafe_base64_encode,
-    urlsafe_base64_decode
-)
-from django.utils.encoding import (
-    force_bytes,
-    force_str
-)
-from django.conf import settings
-
+from django.contrib.auth import get_user_model
 from .models import Device
 from .tasks import send_email_task
 from .utils import (
@@ -19,12 +8,15 @@ from .utils import (
     store_refresh_token,
     verify_token,
 )
-
-import datetime
+from datetime import datetime
 import re
 import uuid
 from .tasks import send_new_login_alert_task
 from .utils import generate_password_reset_token, generate_verification_token
+import json
+from django.conf import settings
+
+redis_client = settings.REDIS_CLIENT
 
 
 User = get_user_model()
@@ -247,15 +239,100 @@ class LoginSerializer(serializers.Serializer):
 
 
 class RefreshTokenSerializer(serializers.Serializer):
-
-    refresh = serializers.CharField(
-        required=False
-    )
-
+    refresh = serializers.CharField()
     platform = serializers.CharField()
 
     def validate(self, attrs):
+        refresh_token = attrs["refresh"]
 
+        payload = verify_token(refresh_token, "refresh")
+
+        if not payload:
+            raise serializers.ValidationError(
+                "Invalid or expired refresh token"
+            )
+
+        user_id = payload.get("user_id")
+        jti = payload.get("jti")
+
+        redis_key = f"hash-rt-for-user-{user_id}"
+
+        token_data = redis_client.hget(redis_key, jti)
+
+        if not token_data:
+            raise serializers.ValidationError(
+                "Session expired. Please login again."
+            )
+
+        token_info = json.loads(token_data)
+
+        created_at = datetime.fromisoformat(
+            token_info["created_at"]
+        )
+
+        token_age = (
+            datetime.utcnow() - created_at
+        ).days
+
+        if token_age >= settings.REFRESH_TOKEN_LIFETIME:
+            redis_client.hdel(redis_key, jti)
+
+            raise serializers.ValidationError(
+                "Session expired. Please login again."
+            )
+
+        attrs["payload"] = payload
+        attrs["redis_key"] = redis_key
+        attrs["old_jti"] = jti
+
+        return attrs
+
+    def save(self):
+        payload = self.validated_data["payload"]
+        redis_key = self.validated_data["redis_key"]
+        old_jti = self.validated_data["old_jti"]
+
+        user = User.objects.get(
+            id=payload["user_id"]
+        )
+
+        device_id = payload.get("device_id")
+        platform = payload.get("platform")
+
+        # Remove old refresh token
+        redis_client.hdel(redis_key, old_jti)
+
+        # Create new tokens
+        access_token = create_access_token(
+            user,
+            device_id,
+            platform
+        )
+
+        refresh_token = create_refresh_token(
+            user,
+            device_id,
+            platform
+        )
+
+        # Save new refresh token
+        store_refresh_token(
+            refresh_token,
+            user,
+            device_id,
+            platform
+        )
+
+        return {
+            "access": access_token,
+            "refresh": refresh_token
+        }
+    
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+    def validate(self, attrs):
         refresh_token = attrs.get("refresh")
 
         if not refresh_token:
@@ -273,94 +350,36 @@ class RefreshTokenSerializer(serializers.Serializer):
                 "Invalid or expired refresh token"
             )
 
-        attrs["payload"] = payload
+        user_id = payload.get("user_id")
+        jti = payload.get("jti")
 
-        attrs["refresh_token"] = refresh_token
+        redis_key = (
+            f"hash-rt-for-user-{user_id}"
+        )
+
+        token_data = redis_client.hget(
+            redis_key,
+            jti
+        )
+
+        if not token_data:
+            raise serializers.ValidationError(
+                "Session already expired"
+            )
+
+        attrs["redis_key"] = redis_key
+        attrs["jti"] = jti
 
         return attrs
 
     def save(self):
-
-        payload = self.validated_data["payload"]
-
-        old_refresh_token = self.validated_data[
-            "refresh_token"
-        ]
-
-        user = User.objects.get(
-            id=payload["user_id"]
-        )
-
-        device_id = payload.get("device_id")
-
-        platform = payload.get("platform")
-
-        new_access = create_access_token(
-            user,
-            device_id,
-            platform
-        )
-
-        new_refresh = create_refresh_token(
-            user,
-            device_id,
-            platform
-        )
-
-        store_refresh_token(
-            new_refresh,
-            user,
-            device_id,
-            platform
+        redis_client.hdel(
+            self.validated_data["redis_key"],
+            self.validated_data["jti"]
         )
 
         return {
-            "access": new_access,
-            "refresh": new_refresh
+            "message": "Logout successful"
         }
-
-
-class LogoutSerializer(serializers.Serializer):
-
-    refresh = serializers.CharField(
-        required=False
-    )
-
-    platform = serializers.CharField()
-
-    all_devices = serializers.BooleanField(
-        default=False
-    )
-
-    def validate(self, attrs):
-
-        if (
-            not attrs.get("refresh") and
-            attrs.get("platform") != "web"
-        ):
-            if not attrs.get("all_devices"):
-                raise serializers.ValidationError(
-                    "Refresh token required"
-                )
-
-        return attrs
-
-    def save(self, user, request):
-
-        platform = self.validated_data["platform"]
-
-        all_devices = self.validated_data.get(
-            "all_devices",
-            False
-        )
-
-        refresh_token = self.validated_data.get(
-            "refresh"
-        )
-
-        if refresh_token:
-            return {
-                "msg": "Logged out successfully"
-                }
 
 
