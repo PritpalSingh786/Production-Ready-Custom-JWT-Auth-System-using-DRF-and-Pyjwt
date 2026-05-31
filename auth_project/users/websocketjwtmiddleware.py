@@ -1,15 +1,17 @@
 import jwt
 
 from django.conf import settings
-from django.contrib.auth.models import (
-    AnonymousUser
-)
+from django.contrib.auth.models import AnonymousUser
 
 from channels.middleware import BaseMiddleware
 
-from asgiref.sync import sync_to_async
 
-from users.models import User
+class JWTUser:
+
+    def __init__(self, user_id):
+        self.id = user_id
+        self.user_id = user_id
+        self.is_authenticated = True
 
 
 class JWTAuthMiddleware(BaseMiddleware):
@@ -20,9 +22,11 @@ class JWTAuthMiddleware(BaseMiddleware):
         receive,
         send
     ):
-        query_string = scope[
-            "query_string"
-        ].decode()
+
+        query_string = (
+            scope["query_string"]
+            .decode()
+        )
 
         token = None
 
@@ -38,6 +42,7 @@ class JWTAuthMiddleware(BaseMiddleware):
         if token:
 
             try:
+
                 payload = jwt.decode(
                     token,
                     settings.SECRET_KEY,
@@ -48,41 +53,32 @@ class JWTAuthMiddleware(BaseMiddleware):
                     issuer=settings.JWT_ISSUER
                 )
 
-                user = await sync_to_async(
-                    User.objects.get
-                )(
-                    id=payload["user_id"]
+                if (
+                    payload.get("type")
+                    != "access"
+                ):
+                    raise jwt.InvalidTokenError(
+                        "Invalid token type"
+                    )
+
+                scope["user"] = JWTUser(
+                    payload["user_id"]
                 )
 
-                scope["user"] = user
-
-                scope["device_id"] = payload.get(
-                    "device_id"
+                scope["device_id"] = (
+                    payload.get("device_id")
                 )
 
-                scope["platform"] = payload.get(
-                    "platform"
+                scope["platform"] = (
+                    payload.get("platform")
                 )
 
-            except jwt.ExpiredSignatureError:
+            except Exception as e:
 
-                await send({
-                    "type": "websocket.close",
-                    "code": 4001
-                })
-
-                return
-
-            except jwt.InvalidTokenError:
-
-                await send({
-                    "type": "websocket.close",
-                    "code": 4001
-                })
-
-                return
-
-            except User.DoesNotExist:
+                print(
+                    "JWT ERROR:",
+                    str(e)
+                )
 
                 await send({
                     "type": "websocket.close",

@@ -6,7 +6,7 @@ from .utils import (
     create_access_token,
     create_refresh_token,
     store_refresh_token,
-    verify_token,
+    decode_token
 )
 from datetime import datetime
 import re
@@ -153,7 +153,6 @@ class LoginSerializer(serializers.Serializer):
     def validate(self, attrs):
         try:
             user = User.objects.get(user_id=attrs["userId"])
-            print(user,"userrrrrr")
             if not user.check_password(attrs["password"]):
                 raise User.DoesNotExist
         except User.DoesNotExist:
@@ -198,9 +197,6 @@ class LoginSerializer(serializers.Serializer):
         if device:
             # Generate password reset token (expires in 3 minutes)
             reset_token = generate_password_reset_token(user.id)
-
-            print("start")
-            
             # Send email asynchronously
             send_new_login_alert_task.delay(
                 user_email=user.email,
@@ -214,7 +210,6 @@ class LoginSerializer(serializers.Serializer):
         # Create tokens
         access_token = create_access_token(user, device_id, platform)
         refresh_token = create_refresh_token(user, device_id, platform)
-        print("hellooooooo")
         
         # Store refresh token
         store_refresh_token(
@@ -245,7 +240,7 @@ class RefreshTokenSerializer(serializers.Serializer):
     def validate(self, attrs):
         refresh_token = attrs["refresh"]
 
-        payload = verify_token(refresh_token, "refresh")
+        payload = decode_token(refresh_token, "refresh")
 
         if not payload:
             raise serializers.ValidationError(
@@ -340,7 +335,7 @@ class LogoutSerializer(serializers.Serializer):
                 "Refresh token required"
             )
 
-        payload = verify_token(
+        payload = decode_token(
             refresh_token,
             "refresh"
         )

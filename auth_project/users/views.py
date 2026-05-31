@@ -157,7 +157,7 @@ class LoginView(APIView):
         return response
     
 
-class PasswordResetPageView(View):
+class SecurePasswordChangeTemplatePageView(View):
     """Render password reset template"""
     
     def get(self, request, user_id, token):
@@ -167,20 +167,18 @@ class PasswordResetPageView(View):
                 'message': 'Invalid or expired link. Please request a new one.'
             })
         
-        return render(request, 'users/reset_password.html', {
+        return render(request, 'users/secure_password_change_template.html', {
             'user_id': user_id,
             'token': token
         })
 
 
-class PasswordResetConfirmView(APIView):
+class SecurePasswordChangeView(APIView):
     """Handle password reset form submission"""
     permission_classes = [AllowAny]
     
     def post(self, request):
-        print("starttttttt")
         try:
-            print("startttttttt")
             # Parse request data
             user_id = request.data.get('user_id')
             token = request.data.get('token')

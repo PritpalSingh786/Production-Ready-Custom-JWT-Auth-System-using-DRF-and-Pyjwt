@@ -1,34 +1,48 @@
-# consumers.py
 import json
-from channels.generic.websocket import AsyncWebsocketConsumer
-from users.utils import averify_token
+
+from channels.generic.websocket import (
+    AsyncWebsocketConsumer
+)
 
 
-class AuthConsumer(AsyncWebsocketConsumer):
+class AuthConsumer(
+    AsyncWebsocketConsumer
+):
 
     async def connect(self):
-        query_string = self.scope["query_string"].decode()
-        token = None
 
-        if "token=" in query_string:
-            token = query_string.split("token=")[1].split("&")[0]
+        user = self.scope["user"]
 
-        user_id = None
-        device_id = None
-
-        if token:
-            payload = await averify_token(token, "access")
-            if payload:
-                user_id = payload.get("user_id")
-                device_id = payload.get("device_id")
-
-        if not user_id or not device_id:
-            await self.close()
+        if not getattr(
+            user,
+            "is_authenticated",
+            False
+        ):
+            await self.close(
+                code=4001
+            )
             return
 
-        self.user_id = user_id
-        self.device_id = device_id
-        self.group_name = f"user_{user_id}_{device_id}"
+        self.user_id = str(
+            user.id
+        )
+
+        self.device_id = (
+            self.scope.get(
+                "device_id"
+            )
+        )
+
+        if not self.device_id:
+            await self.close(
+                code=4001
+            )
+            return
+
+        self.group_name = (
+            f"user_{self.user_id}_"
+            f"{self.device_id}"
+        )
 
         await self.channel_layer.group_add(
             self.group_name,
@@ -40,21 +54,36 @@ class AuthConsumer(AsyncWebsocketConsumer):
         await self.send(
             text_data=json.dumps({
                 "type": "CONNECTED",
-                "message": "WebSocket connected successfully"
+                "message": (
+                    "WebSocket connected successfully"
+                )
             })
         )
 
-    async def disconnect(self, close_code):
-        if hasattr(self, "group_name"):
+    async def disconnect(
+        self,
+        close_code
+    ):
+        if hasattr(
+            self,
+            "group_name"
+        ):
             await self.channel_layer.group_discard(
                 self.group_name,
                 self.channel_name
             )
-    
-    async def logout_notification(self, event):
-        """Receive logout notification from channel layer"""
-        await self.send(text_data=json.dumps({
-            "type": "LOGOUT",
-            "message": event["message"],
-            "action": "redirect_login"
-        }))
+
+    async def logout_notification(
+        self,
+        event
+    ):
+        await self.send(
+            text_data=json.dumps({
+                "type": "LOGOUT",
+                "message": event[
+                    "message"
+                ],
+                "action":
+                "redirect_login"
+            })
+        )

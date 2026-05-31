@@ -84,117 +84,6 @@ def create_refresh_token(
     )
 
 
-def verify_token(token, token_type="access"):
-    try:
-        payload = jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
-            audience=settings.JWT_AUDIENCE,
-            issuer=settings.JWT_ISSUER,
-            options={
-                "require": ["exp", "iat", "jti", "type"]
-            }
-        )
-
-        if payload.get("type") != token_type:
-            return None
-
-        # Check blacklist (optional)
-        if redis_client.get(f"blacklist:{payload.get('jti')}"):
-            return None
-
-        # Check expiration
-        if payload["exp"] < datetime.utcnow().timestamp():
-            return None
-
-        # Check user exists
-        user_exists = User.objects.filter(
-            id=payload["user_id"],
-            is_active=True
-        ).exists()
-
-        if not user_exists:
-            return None
-
-        return payload
-
-    except jwt.ExpiredSignatureError:
-        # Token expired - still return payload for cleanup
-        try:
-            # Decode without expiration validation
-            payload = jwt.decode(
-                token,
-                settings.SECRET_KEY,
-                algorithms=[settings.JWT_ALGORITHM],
-                audience=settings.JWT_AUDIENCE,
-                issuer=settings.JWT_ISSUER,
-                options={"verify_exp": False}
-            )
-            return payload
-        except:
-            return None
-    except Exception:
-        return None
-
-
-async def averify_token(
-    token,
-    token_type="access"
-):
-    try:
-        payload = jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=[
-                settings.JWT_ALGORITHM
-            ],
-            audience=settings.JWT_AUDIENCE,
-            issuer=settings.JWT_ISSUER,
-            options={
-                "require": [
-                    "exp",
-                    "iat",
-                    "jti",
-                    "type"
-                ]
-            }
-        )
-
-        if payload.get("type") != token_type:
-            return None
-
-        from asgiref.sync import sync_to_async
-
-        is_blacklisted = await sync_to_async(
-            redis_client.get
-        )(f"blacklist:{payload.get('jti')}")
-
-        if is_blacklisted:
-            return None
-
-        if (
-            payload["exp"] <
-            datetime.utcnow().timestamp()
-        ):
-            return None
-
-        user_exists = await sync_to_async(
-            User.objects.filter(
-                id=payload["user_id"],
-                is_active=True
-            ).exists
-        )()
-
-        if not user_exists:
-            return None
-
-        return payload
-
-    except Exception:
-        return None
-
-
 def store_refresh_token(
     refresh_token_str,
     user,
@@ -243,6 +132,38 @@ def store_refresh_token(
         return False
     
 
+def decode_token(
+    token,
+    token_type
+):
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[
+                settings.JWT_ALGORITHM
+            ],
+            audience=settings.JWT_AUDIENCE,
+            issuer=settings.JWT_ISSUER,
+            options={
+                "require": [
+                    "exp",
+                    "iat",
+                    "jti",
+                    "type"
+                ]
+            }
+        )
+
+        if payload["type"] != token_type:
+            return None
+
+        return payload
+
+    except Exception:
+        return None
+    
+
 def generate_password_reset_token(user_id):
     token = secrets.token_urlsafe(32)
 
@@ -256,15 +177,11 @@ def generate_password_reset_token(user_id):
 
 
 def verify_password_reset_token(user_id, token):
-    print(user_id, "uuuuuuuuu")
-    print(token, "tttttttttt")
     """Verify if token is valid"""
-    key = f"pwd_reset:{user_id}:{token}"
+    key = f"pwd_reset:{user_id}"
     stored_token = redis_client.get(key)
-    print(stored_token, "sssss")
     
     if stored_token and stored_token == token:
-        print("delete")
         # Delete token after verification (one-time use)
         redis_client.delete(key)
         return True

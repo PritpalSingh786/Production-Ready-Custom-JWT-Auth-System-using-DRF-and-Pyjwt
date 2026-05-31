@@ -6,24 +6,23 @@ from .views import (
     RefreshTokenView,
     LogoutView,
     AuthenticatedView,
-    PasswordResetPageView,
-    PasswordResetConfirmView
+    SecurePasswordChangeTemplatePageView,
+    SecurePasswordChangeView
 )
 
 urlpatterns = [
     path("register/", RegisterView.as_view()),
     path("verify-email/", VerifyEmailPageView.as_view()),
     path("login/", LoginView.as_view()),
+    path('secure-password-change-template/<str:user_id>/<str:token>/', 
+        SecurePasswordChangeTemplatePageView.as_view(), 
+         name='secure-password-template'),
+    path('secure-password-change/', 
+         SecurePasswordChangeView.as_view(), 
+         name='secure-password-change'),
     path("token/refresh/", RefreshTokenView.as_view()),
     path("logout/", LogoutView.as_view()),
     path("authenticated/", AuthenticatedView.as_view()),
-    path('reset-password/<str:user_id>/<str:token>/', 
-         PasswordResetPageView.as_view(), 
-         name='password_reset_page'),
-    
-    path('api/reset-password/', 
-         PasswordResetConfirmView.as_view(), 
-         name='password_reset_confirm'),
 ]
 
 """
