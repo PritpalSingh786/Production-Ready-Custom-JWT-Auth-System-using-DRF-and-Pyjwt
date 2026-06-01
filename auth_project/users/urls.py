@@ -7,7 +7,10 @@ from .views import (
     LogoutView,
     AuthenticatedView,
     SecurePasswordChangeTemplatePageView,
-    SecurePasswordChangeView
+    SecurePasswordChangeView,
+    ForgotPasswordEmailSentAPIView, 
+    PasswordChangeTemplatePageView,
+    PasswordChangeView
 )
 
 urlpatterns = [
@@ -23,6 +26,22 @@ urlpatterns = [
     path("token/refresh/", RefreshTokenView.as_view()),
     path("logout/", LogoutView.as_view()),
     path("authenticated/", AuthenticatedView.as_view()),
+    path(
+        "forgot-password/",
+        ForgotPasswordEmailSentAPIView.as_view(),
+        name="forgot-password"
+    ),
+    path(
+        "password-change-template/<str:user_id>/<str:token>/",
+        PasswordChangeTemplatePageView.as_view(),
+        name="password-change-template"
+    ),
+
+    path(
+        "password-change/",
+        PasswordChangeView.as_view(),
+        name="password-change"
+    ),
 ]
 
 """

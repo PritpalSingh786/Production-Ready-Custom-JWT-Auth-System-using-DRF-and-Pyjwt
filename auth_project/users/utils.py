@@ -164,7 +164,7 @@ def decode_token(
         return None
     
 
-def generate_password_reset_token(user_id):
+def secure_generate_password_reset_token(user_id):
     token = secrets.token_urlsafe(32)
 
     redis_client.setex(
@@ -176,7 +176,7 @@ def generate_password_reset_token(user_id):
     return token
 
 
-def verify_password_reset_token(user_id, token):
+def secure_verify_password_reset_token(user_id, token):
     """Verify if token is valid"""
     key = f"pwd_reset:{user_id}"
     stored_token = redis_client.get(key)
@@ -229,3 +229,47 @@ def verify_email_token(user_id, token):
         return True, "Email verified successfully"
     
     return False, "Verification link has expired (5 minutes) or is invalid"
+
+
+def generate_password_reset_token(user_id):
+    """
+    Generate password reset token with 5 minutes expiry
+    """
+
+    token = secrets.token_urlsafe(32)
+
+    key = f"password_reset:{user_id}:{token}"
+
+    token_data = {
+        "token": token,
+        "user_id": str(user_id),
+        "created_at": datetime.utcnow().isoformat(),
+        "expires_at": (
+            datetime.utcnow() + timedelta(minutes=5)
+        ).isoformat()
+    }
+
+    redis_client.setex(
+        key,
+        300,
+        json.dumps(token_data)
+    )
+
+    return token
+
+def verify_password_reset_token(user_id, token):
+
+    key = f"password_reset:{user_id}:{token}"
+
+    token_data = redis_client.get(key)
+
+    if not token_data:
+        return False
+
+    return True
+
+def delete_password_reset_token(user_id, token):
+
+    key = f"password_reset:{user_id}:{token}"
+
+    redis_client.delete(key)

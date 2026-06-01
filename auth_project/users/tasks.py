@@ -118,3 +118,18 @@ def logout_all_devices_task(user_id, excluded_device_id=None):
             )
     
     return len(all_tokens)
+
+
+@shared_task
+def send_forgot_password_email_task(
+    subject,
+    message,
+    recipient_list
+):
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        recipient_list,
+        fail_silently=False
+    )
