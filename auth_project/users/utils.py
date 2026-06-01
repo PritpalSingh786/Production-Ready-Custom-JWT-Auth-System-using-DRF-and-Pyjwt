@@ -274,6 +274,17 @@ def delete_password_reset_token(user_id, token):
 
     redis_client.delete(key)
 
+def verify_secure_password_reset_token(user_id, token):
+
+    key = f"pwd_reset:{user_id}:{token}"
+
+    token_data = redis_client.get(key)
+
+    if not token_data:
+        return False
+
+    return True
+
 def delete_secure_password_reset_token(user_id, token):
 
     key = f"pwd_reset:{user_id}:{token}"

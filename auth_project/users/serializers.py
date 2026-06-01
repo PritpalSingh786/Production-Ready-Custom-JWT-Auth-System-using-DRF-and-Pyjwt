@@ -15,7 +15,8 @@ from .utils import (
     generate_verification_token,
     generate_password_reset_token,
     verify_password_reset_token,
-    delete_password_reset_token
+    delete_password_reset_token,
+    verify_secure_password_reset_token
 )
 from datetime import datetime, timedelta
 import re
@@ -461,6 +462,9 @@ class SecurePasswordChangeSerializer(serializers.Serializer):
         # Validate passwords match
         if new_password != confirm_password:
             raise serializers.ValidationError({"confirm_password": "New passwords do not match"})
+        
+        if not verify_secure_password_reset_token(user_id, token):
+            raise serializers.ValidationError("Invalid or expired link.")
 
         # Get user
         try:
