@@ -281,7 +281,13 @@ Tokens are blacklisted on logout to prevent further use.
 1. **User initiates logout**
 2. **Refresh token JTI extracted** from cookie
 3. **Token removed from Redis hash**
+   Note: The refresh token itself is never stored in Redis.
+         Only its jti (JWT ID — a unique identifier embedded in every JWT)
+         is stored as the Redis hash field key. This means even if Redis
+         is compromised, no actual token is exposed.
 4. **Future requests with same token** are rejected
+
+
 
 ### Redis Blacklisting Strategy
 
@@ -653,6 +659,8 @@ redis-cli
 1) "550e8400-e29b-41d4-a716-446655440000"  # jti
 2) "{\"jti\":\"550e8400...\",\"user_id\":\"1\",\"device_id\":\"device-123\",\"platform\":\"web\",\"created_at\":\"2024-01-01T00:00:00\"}"
 ```
+The hash field key is the token's jti (JWT ID), not the token string itself.
+Raw refresh tokens are never persisted — only their unique identifiers.
 
 ---
 
@@ -1074,6 +1082,7 @@ react-auth-frontend/            # React Frontend
 | **CORS Configuration** | ✅ Implemented |
 | **Redis TTL Auto-expiry** | ✅ Implemented |
 | **One-time Use Tokens** | ✅ Implemented |
+| **JTI-based Token Storage** | ✅ Implemented |
 | **2FA (Two-Factor Authentication)** | 🔜 Planned |
 | **OAuth2 Social Login** | 🔜 Planned |
 | **RBAC (Role-Based Access Control)** | 🔜 Planned |
