@@ -50,3 +50,7 @@ web: gunicorn rentNotify.wsgi
 worker: celery -A auth_project worker --loglevel=info
 
 """
+
+
+
+

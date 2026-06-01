@@ -273,3 +273,9 @@ def delete_password_reset_token(user_id, token):
     key = f"password_reset:{user_id}:{token}"
 
     redis_client.delete(key)
+
+def delete_secure_password_reset_token(user_id, token):
+
+    key = f"pwd_reset:{user_id}:{token}"
+
+    redis_client.delete(key)

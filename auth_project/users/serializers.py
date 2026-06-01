@@ -5,6 +5,7 @@ from .tasks import send_email_task, send_password_changed_email_task, logout_all
 from .utils import (
     create_access_token,
     create_refresh_token,
+    delete_secure_password_reset_token,
     store_refresh_token,
     decode_token,
     verify_email_token,
@@ -461,10 +462,6 @@ class SecurePasswordChangeSerializer(serializers.Serializer):
         if new_password != confirm_password:
             raise serializers.ValidationError({"confirm_password": "New passwords do not match"})
 
-        # Validate token
-        if not secure_verify_password_reset_token(user_id, token):
-            raise serializers.ValidationError("Invalid or expired link. Please request a new one.")
-
         # Get user
         try:
             user = User.objects.get(id=user_id)
@@ -480,6 +477,7 @@ class SecurePasswordChangeSerializer(serializers.Serializer):
 
     def save(self):
         user = self.validated_data["user"]
+        token = self.validated_data["token"]
         new_password = self.validated_data["new_password"]
         
         # Change password
@@ -493,6 +491,8 @@ class SecurePasswordChangeSerializer(serializers.Serializer):
         
         # Logout from all devices (async)
         logout_all_devices_task.delay(user.id)
+
+        delete_secure_password_reset_token(user, token)
         
         return {
             "success": True,
