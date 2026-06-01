@@ -19,15 +19,15 @@ def send_email_task(subject, message, recipient_list):
 
 
 @shared_task
-def send_new_login_alert_task(user_email, user_name, device_name, ip_address, platform, reset_token):
+def send_new_login_alert_task(user_email, id, userId, device_name, ip_address, platform, reset_token):
     """Send alert email when new login detected"""
     # Create reset link (using your domain)
-    reset_link = f"{settings.DOMAIN_URL}/secure-password-change-template/{user_name}/{reset_token}/"
+    reset_link = f"{settings.DOMAIN_URL}/secure-password-change-template/{id}/{reset_token}/"
     
-    subject = f"🔐 New Login Detected - {user_name}"
+    subject = f"🔐 New Login Detected - {userId}"
     
     message = f"""
-    Hello {user_name},
+    Hello {userId},
     
     We detected a new login to your account:
     

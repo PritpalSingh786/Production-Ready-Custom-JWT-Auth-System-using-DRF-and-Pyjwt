@@ -184,7 +184,8 @@ class LoginSerializer(serializers.Serializer):
             reset_token = secure_generate_password_reset_token(user.id)
             send_new_login_alert_task.delay(
                 user_email=user.email,
-                user_name=user.id,
+                id=user.id,
+                userId=user.user_id,
                 device_name=device_name,
                 ip_address=ip_address,
                 platform=platform,

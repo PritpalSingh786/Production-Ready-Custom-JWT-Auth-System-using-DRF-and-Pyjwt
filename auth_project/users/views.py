@@ -226,12 +226,19 @@ class AuthenticatedView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        try:
+            user = User.objects.get(id=request.user.id)  # or user_id
+            email = user.email
+            userId = user.user_id
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+        
         return Response({
             "msg": "Welcome to authenticated view",
             "user": {
                 "id": request.user.id,
-                "userId": request.user.user_id,
-                "email": request.user.email
+                "userId": userId,
+                "email": email
             },
             "device_id": getattr(request, "device_id", None),
             "platform": getattr(request, "platform", None)
