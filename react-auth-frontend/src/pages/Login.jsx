@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { loginSuccess, setLoading, setError, clearMessages, setSuccess, setDeviceId } from '../features/auth/authSlice';
+import {
+  loginSuccess,
+  setLoading,
+  setError,
+  clearMessages,
+  setSuccess,
+  setDeviceId,
+} from '../features/auth/authSlice';
 import { authAPI } from '../features/auth/authAPI';
 import { validateLogin } from '../utils/validation';
 
@@ -9,14 +16,20 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const { isLoading, error, isAuthenticated, successMessage } = useSelector((state) => state.auth);
-  
+
+  const {
+    isLoading,
+    error,
+    isAuthenticated,
+    successMessage,
+  } = useSelector((state) => state.auth);
+
   const [formData, setFormData] = useState({
     userId: '',
     password: '',
     platform: 'web',
   });
-  
+
   const [validationErrors, setValidationErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
 
@@ -24,11 +37,11 @@ const Login = () => {
     if (isAuthenticated) {
       navigate('/dashboard');
     }
-    
+
     if (location.state?.message) {
       dispatch(setSuccess(location.state.message));
     }
-    
+
     return () => {
       dispatch(clearMessages());
     };
@@ -39,6 +52,7 @@ const Login = () => {
       ...formData,
       [e.target.name]: e.target.value,
     });
+
     if (validationErrors[e.target.name]) {
       setValidationErrors({
         ...validationErrors,
@@ -49,8 +63,9 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     const errors = validateLogin(formData);
+
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
       return;
@@ -61,22 +76,46 @@ const Login = () => {
 
     try {
       const response = await authAPI.login(formData);
-      
-      const deviceId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36);
+
+      const deviceId = crypto.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36);
+
       dispatch(setDeviceId(deviceId));
-      
-      dispatch(loginSuccess({
-        access: response.access,
-        refresh: response.refresh,
-        user: response.user,
-      }));
-      
+
+      dispatch(
+        loginSuccess({
+          access: response.access,
+          refresh: response.refresh,
+          user: response.user,
+        })
+      );
+
       navigate('/dashboard');
-      
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.error || 
-                          'Login failed. Please check your credentials.';
+      console.log('Login Error:', error.response?.data);
+
+      let errorMessage =
+        'Login failed. Please check your credentials.';
+
+      const data = error.response?.data;
+
+      if (data) {
+        if (data.non_field_errors) {
+          errorMessage = Array.isArray(data.non_field_errors)
+            ? data.non_field_errors[0]
+            : data.non_field_errors;
+        } else if (data.message) {
+          errorMessage = data.message;
+        } else if (data.error) {
+          errorMessage = data.error;
+        } else {
+          errorMessage = Object.values(data)
+            .flat()
+            .join(', ');
+        }
+      }
+
       dispatch(setError(errorMessage));
     } finally {
       dispatch(setLoading(false));
@@ -86,19 +125,19 @@ const Login = () => {
   return (
     <div className="form-container">
       <h2 className="form-title">Login</h2>
-      
+
       {error && (
         <div className="error-message">
           {error}
         </div>
       )}
-      
+
       {successMessage && (
         <div className="success-message">
           {successMessage}
         </div>
       )}
-      
+
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label>User ID</label>
@@ -110,21 +149,25 @@ const Login = () => {
             placeholder="Enter your user ID"
           />
           {validationErrors.userId && (
-            <small style={{ color: '#c33' }}>{validationErrors.userId}</small>
+            <small style={{ color: '#c33' }}>
+              {validationErrors.userId}
+            </small>
           )}
         </div>
 
         <div className="form-group">
           <label>Password</label>
+
           <div style={{ position: 'relative' }}>
             <input
-              type={showPassword ? "text" : "password"}
+              type={showPassword ? 'text' : 'password'}
               name="password"
               value={formData.password}
               onChange={handleChange}
               placeholder="Enter your password"
               style={{ paddingRight: '40px' }}
             />
+
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
@@ -136,19 +179,23 @@ const Login = () => {
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                fontSize: '16px'
+                fontSize: '16px',
               }}
             >
               {showPassword ? '🙈' : '👁️'}
             </button>
           </div>
+
           {validationErrors.password && (
-            <small style={{ color: '#c33' }}>{validationErrors.password}</small>
+            <small style={{ color: '#c33' }}>
+              {validationErrors.password}
+            </small>
           )}
         </div>
 
         <div className="form-group">
           <label>Platform</label>
+
           <select
             name="platform"
             value={formData.platform}
@@ -157,21 +204,35 @@ const Login = () => {
             <option value="web">Web</option>
             <option value="mobile">Mobile</option>
           </select>
+
           {validationErrors.platform && (
-            <small style={{ color: '#c33' }}>{validationErrors.platform}</small>
+            <small style={{ color: '#c33' }}>
+              {validationErrors.platform}
+            </small>
           )}
         </div>
 
-        <button type="submit" className="btn" disabled={isLoading}>
-          {isLoading ? <span className="spinner"></span> : 'Login'}
+        <button
+          type="submit"
+          className="btn"
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <span className="spinner"></span>
+          ) : (
+            'Login'
+          )}
         </button>
 
         <div className="link">
-          <Link to="/forgot-password">Forgot Password?</Link>
+          <Link to="/forgot-password">
+            Forgot Password?
+          </Link>
         </div>
-        
+
         <div className="link">
-          Don't have an account? <Link to="/register">Register</Link>
+          Don't have an account?{' '}
+          <Link to="/register">Register</Link>
         </div>
       </form>
     </div>
