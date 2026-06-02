@@ -3,7 +3,6 @@ import Register from './pages/Register';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ForgotPassword from './pages/ForgotPassword';
-import PasswordChange from './pages/PasswordChange';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -14,7 +13,6 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/password-change/:user_id/:token" element={<PasswordChange />} />
         <Route
           path="/dashboard"
           element={
