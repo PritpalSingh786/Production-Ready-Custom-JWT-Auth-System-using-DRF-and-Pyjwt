@@ -18,6 +18,7 @@ const Login = () => {
   });
   
   const [validationErrors, setValidationErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -64,9 +65,9 @@ const Login = () => {
       const deviceId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36);
       dispatch(setDeviceId(deviceId));
       
-      // Store only access token and user data (refresh token is in HTTP-only cookie)
       dispatch(loginSuccess({
         access: response.access,
+        refresh: response.refresh,
         user: response.user,
       }));
       
@@ -115,13 +116,32 @@ const Login = () => {
 
         <div className="form-group">
           <label>Password</label>
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            placeholder="Enter your password"
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="Enter your password"
+              style={{ paddingRight: '40px' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '16px'
+              }}
+            >
+              {showPassword ? '🙈' : '👁️'}
+            </button>
+          </div>
           {validationErrors.password && (
             <small style={{ color: '#c33' }}>{validationErrors.password}</small>
           )}

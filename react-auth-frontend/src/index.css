@@ -229,3 +229,20 @@ body {
   border-top-color: #667eea;
   animation: spin 1s ease-in-out infinite;
 }
+
+
+.form-group button[type="button"]:hover {
+  opacity: 0.8;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.form-group button[type="button"]:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+/* Smooth transition for password toggle */
+.form-group input {
+  transition: padding-right 0.3s ease;
+}
+
+
