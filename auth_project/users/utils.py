@@ -162,31 +162,6 @@ def decode_token(
 
     except Exception:
         return None
-    
-
-def secure_generate_password_reset_token(user_id):
-    token = secrets.token_urlsafe(32)
-
-    redis_client.setex(
-        f"pwd_reset:{user_id}",
-        180,
-        token
-    )
-
-    return token
-
-
-def secure_verify_password_reset_token(user_id, token):
-    """Verify if token is valid"""
-    key = f"pwd_reset:{user_id}"
-    stored_token = redis_client.get(key)
-    
-    if stored_token and stored_token == token:
-        # Delete token after verification (one-time use)
-        redis_client.delete(key)
-        return True
-    
-    return False
 
 
 def change_user_password(user, new_password):
@@ -224,11 +199,15 @@ def verify_email_token(user_id, token):
     stored_data = redis_client.get(key)
     
     if stored_data:
-        # Delete token after verification (one-time use)
-        redis_client.delete(key)
         return True, "Email verified successfully"
     
     return False, "Verification link has expired (5 minutes) or is invalid"
+
+def delete_verify_email_token(user_id, token):
+
+    key = f"email_verify:{user_id}:{token}"
+
+    redis_client.delete(key)
 
 
 def generate_password_reset_token(user_id):
@@ -274,19 +253,30 @@ def delete_password_reset_token(user_id, token):
 
     redis_client.delete(key)
 
-def verify_secure_password_reset_token(user_id, token):
+def secure_generate_password_reset_token(user_id):
+    token = secrets.token_urlsafe(32)
 
-    key = f"pwd_reset:{user_id}:{token}"
+    redis_client.setex(
+        f"pwd_reset:{user_id}",
+        180,
+        token
+    )
 
-    token_data = redis_client.get(key)
+    return token
 
-    if not token_data:
-        return False
+def secure_verify_password_reset_token(user_id, token):
+    """Verify if token is valid"""
+    key = f"pwd_reset:{user_id}"
+    stored_token = redis_client.get(key)
+    
+    if stored_token and stored_token == token:
+        return True
+    
+    return False
 
-    return True
 
 def delete_secure_password_reset_token(user_id, token):
 
-    key = f"pwd_reset:{user_id}:{token}"
+    key = f"pwd_reset:{user_id}"
 
     redis_client.delete(key)

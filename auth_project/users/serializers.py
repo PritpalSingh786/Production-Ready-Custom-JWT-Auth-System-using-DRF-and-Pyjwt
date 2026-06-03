@@ -16,7 +16,7 @@ from .utils import (
     generate_password_reset_token,
     verify_password_reset_token,
     delete_password_reset_token,
-    verify_secure_password_reset_token
+    delete_verify_email_token
 )
 from datetime import datetime, timedelta
 import re
@@ -429,11 +429,13 @@ class EmailVerificationSerializer(serializers.Serializer):
 
     def save(self):
         user = self.validated_data["user"]
+        token = self.validated_data["token"]
         
         # Activate user account
         user.email_verified = True
         user.is_active = True
         user.save()
+        delete_verify_email_token(user.id, token)
         
         return {
             "user": user,
@@ -463,7 +465,7 @@ class SecurePasswordChangeSerializer(serializers.Serializer):
         if new_password != confirm_password:
             raise serializers.ValidationError({"confirm_password": "New passwords do not match"})
         
-        if not verify_secure_password_reset_token(user_id, token):
+        if not secure_verify_password_reset_token(user_id, token):
             raise serializers.ValidationError("Invalid or expired link.")
 
         # Get user
@@ -496,7 +498,7 @@ class SecurePasswordChangeSerializer(serializers.Serializer):
         # Logout from all devices (async)
         logout_all_devices_task.delay(user.id)
 
-        delete_secure_password_reset_token(user, token)
+        delete_secure_password_reset_token(user.id, token)
         
         return {
             "success": True,
